@@ -11,9 +11,11 @@ export async function createTest(formData: FormData) {
   const passingScore = Number(formData.get('passing_score') ?? 70)
   const singlePage = formData.get('single_page') === 'on'
   const examPreset = String(formData.get('exam_preset') ?? 'custom')
+  const assessmentType = String(formData.get('assessment_type') ?? 'custom')
+  const chapterLabel = String(formData.get('chapter_label') ?? '')
   let questions: unknown
   try { questions = JSON.parse(String(formData.get('questions') ?? '[]')) } catch { redirect('/tests/new?error=Invalid+question+data') }
-  const { data, error } = await supabase.rpc('create_test_with_questions_v2', {
+  const { data, error } = await supabase.rpc('create_test_with_questions_v3', {
     p_title: title,
     p_description: description,
     p_randomize: randomize,
@@ -21,6 +23,8 @@ export async function createTest(formData: FormData) {
     p_one_question_per_page: singlePage,
     p_passing_score: passingScore,
     p_exam_preset: examPreset,
+    p_assessment_type: assessmentType,
+    p_chapter_label: chapterLabel,
     p_questions: questions,
   })
   if (error) redirect('/tests/new?error=' + encodeURIComponent(error.message))
