@@ -5,6 +5,8 @@ type ShareRow={
 }
 type AttemptRow={id:string;share_id:string|null;score_percent:number|null;correct_count:number|null;total_questions:number|null;submitted_at:string|null;student_id:string|null;attempt_number:number|null;integrity_violation_count:number|null;auto_submitted:boolean|null;student:any}
 
+type StudentAttempts={name:string;attempts:AttemptRow[]}
+
 function studentName(attempt:AttemptRow){const student=Array.isArray(attempt.student)?attempt.student[0]:attempt.student;return student?.full_name||'Student'}
 function fmt(value:string|null){return value?new Date(value).toLocaleString():'None'}
 
@@ -16,8 +18,8 @@ export default function ShareReports({testTitle,shares,attempts}:{testTitle:stri
       const accessedIds=new Set(shareAttempts.map(a=>a.student_id).filter(Boolean))
       const completedAttempts=shareAttempts.filter(a=>Boolean(a.submitted_at))
       const completedIds=new Set(completedAttempts.map(a=>a.student_id).filter(Boolean))
-      const byStudent=new Map<string,{name:string;attempts:AttemptRow[]}>()
-      for(const attempt of shareAttempts){const key=String(attempt.student_id||attempt.id);const current=byStudent.get(key)??{name:studentName(attempt),attempts:[]};current.attempts.push(attempt);byStudent.set(key,current)}
+      const byStudent=new Map<string,StudentAttempts>()
+      for(const attempt of shareAttempts){const key=String(attempt.student_id||attempt.id);const current:StudentAttempts=byStudent.get(key)??{name:studentName(attempt),attempts:[]};current.attempts.push(attempt);byStudent.set(key,current)}
       const mode=share.delivery_mode==='paid_pass'?'Paid practice access':share.delivery_mode==='study'?'Study mode':share.delivery_mode==='restricted'?'Restricted Test Mode':'Standard test'
       const audience=share.audience_mode==='students'?'Specific roster students':share.audience_mode==='groups'?'Specific groups':'Anyone with the share link'
       const attemptsPolicy=share.payment_mode==='paid'?'Practice access':share.unlimited_attempts_until_due?'Unlimited full attempts until due date':`${share.max_attempts||1} full attempt${(share.max_attempts||1)===1?'':'s'}`
