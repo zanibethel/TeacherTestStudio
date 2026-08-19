@@ -11,7 +11,7 @@ export default async function PracticeLibrary({searchParams}:{searchParams:Promi
   if(!user)redirect('/login')
   const{data:profile}=await supabase.from('profiles').select('role').eq('id',user.id).single()
   const{data:bundles}=await supabase.rpc('get_practice_bundle_catalog')
-  const bundleRows=bundles??[]
+  const bundleRows:any[]=bundles??[]
   const bundleIds=bundleRows.map((b:any)=>b.bundle_id)
   const{data:previewLinks}=bundleIds.length
     ?await supabase.from('practice_bundle_collections').select('bundle_id,collection_id,position').in('bundle_id',bundleIds).eq('is_free_preview',true).order('position')
@@ -20,16 +20,16 @@ export default async function PracticeLibrary({searchParams}:{searchParams:Promi
   const{data:previewResources}=previewIds.length
     ?await supabase.from('shared_collections').select('id,title,description,subject,collection_type').in('id',previewIds).eq('active',true)
     :{data:[] as any[]}
-  const previewById=new Map((previewResources??[]).map((r:any)=>[r.id,r]))
+  const previewById=new Map<string,any>((previewResources??[]).map((r:any)=>[String(r.id),r]))
   const previewsByBundle=new Map<string,any[]>()
   for(const link of previewLinks??[]){
-    const resource=previewById.get(link.collection_id)
+    const resource=previewById.get(String(link.collection_id))
     if(!resource)continue
-    const current=previewsByBundle.get(link.bundle_id)??[]
+    const current=previewsByBundle.get(String(link.bundle_id))??[]
     current.push({...resource,position:link.position})
-    previewsByBundle.set(link.bundle_id,current)
+    previewsByBundle.set(String(link.bundle_id),current)
   }
-  const categories=Array.from(new Set(bundleRows.map((b:any)=>String(b.subject)).filter(Boolean))).sort()
+  const categories:string[]=Array.from(new Set<string>(bundleRows.map((b:any)=>String(b.subject??'')).filter((value:string)=>Boolean(value)))).sort()
   const filtered=bundleRows.filter((b:any)=>{
     const matchesCategory=!category||b.subject===category
     const haystack=`${b.title} ${b.subject} ${b.description??''}`.toLowerCase()
@@ -49,7 +49,7 @@ export default async function PracticeLibrary({searchParams}:{searchParams:Promi
       </form>
       <div className="category-chips">
         <Link className={`category-chip ${!category?'active':''}`} href={q?`/practice-library?q=${encodeURIComponent(q)}`:'/practice-library'}>All</Link>
-        {categories.map(c=><Link className={`category-chip ${category===c?'active':''}`} key={c} href={`/practice-library?category=${encodeURIComponent(c)}${q?`&q=${encodeURIComponent(q)}`:''}`}>{c}</Link>)}
+        {categories.map((c:string)=><Link className={`category-chip ${category===c?'active':''}`} key={c} href={`/practice-library?category=${encodeURIComponent(c)}${q?`&q=${encodeURIComponent(q)}`:''}`}>{c}</Link>)}
       </div>
     </section>
 
@@ -57,7 +57,7 @@ export default async function PracticeLibrary({searchParams}:{searchParams:Promi
     {!filtered.length?<section className="card"><h3>No matching bundles</h3><p className="muted">Try a broader search or clear the category filter.</p></section>:<div className="bundle-carousel">
       {filtered.map((b:any)=>{
         const active=['paid','comped'].includes(b.entitlement_status??'')&&(!b.entitlement_expires_at||new Date(b.entitlement_expires_at).getTime()>Date.now())
-        const previews=previewsByBundle.get(b.bundle_id)??[]
+        const previews=previewsByBundle.get(String(b.bundle_id))??[]
         return <section className="card bundle-card" key={b.bundle_id}>
           <div className="row between"><div><h3>{b.title}</h3><p className="muted">{b.subject} · {b.resource_count} included resource{b.resource_count===1?'':'s'}</p></div><span className="pill">{active?'Access active':'24-hour cram available'}</span></div>
           <p>{b.description}</p>
