@@ -58,16 +58,43 @@ export default function ShareSetupForm({roster,groups,presets,proActive,fullQues
   const[settings,setSettings]=useState<Settings>(STANDARD)
   const[savePreset,setSavePreset]=useState(false)
   const[presetName,setPresetName]=useState('')
+  const[attemptChoice,setAttemptChoice]=useState('2')
+  const[customAttempts,setCustomAttempts]=useState(11)
   const selectedOption=options.find(o=>o.key===selectedKey)
   const experienceName=selectedKey==='custom'?(presetName.trim()||'Custom'):(selectedOption?.name||'Custom')
 
+  function syncAttemptChoice(next:Settings){
+    if(next.unlimited){setAttemptChoice('unlimited');return}
+    if(next.maxAttempts>=1&&next.maxAttempts<=10){setAttemptChoice(String(next.maxAttempts));return}
+    setAttemptChoice('custom');setCustomAttempts(next.maxAttempts)
+  }
   function choosePreset(key:string){
     const option=options.find(o=>o.key===key)
     if(!option)return
-    setSelectedKey(key);setSettings({...option.settings});setSavePreset(false);setPresetName('')
+    setSelectedKey(key);setSettings({...option.settings});setSavePreset(false);setPresetName('');syncAttemptChoice(option.settings)
   }
   function change<K extends keyof Settings>(key:K,value:Settings[K]){
     setSettings(current=>({...current,[key]:value}));setSelectedKey('custom')
+  }
+  function changeAttemptChoice(value:string){
+    setAttemptChoice(value)
+    setSelectedKey('custom')
+    if(value==='unlimited'){
+      setSettings(current=>({...current,unlimited:true}))
+      return
+    }
+    if(value==='custom'){
+      setSettings(current=>({...current,unlimited:false,maxAttempts:customAttempts}))
+      return
+    }
+    const count=Number(value)
+    setSettings(current=>({...current,unlimited:false,maxAttempts:count}))
+  }
+  function changeCustomAttempts(value:number){
+    const count=Math.max(1,Math.min(100,value||1))
+    setCustomAttempts(count)
+    setSettings(current=>({...current,unlimited:false,maxAttempts:count}))
+    setSelectedKey('custom')
   }
   const focusedCount=Math.max(1,Math.ceil(fullQuestionCount*(settings.focusedPercent/100)))
 
@@ -99,7 +126,7 @@ export default function ShareSetupForm({roster,groups,presets,proActive,fullQues
 
     <section className={styles.section}><h3>Test environment</h3><select name="delivery_mode" value={settings.deliveryMode} onChange={e=>change('deliveryMode',e.target.value as Settings['deliveryMode'])}><option value="standard">Standard test</option><option value="restricted">Restricted Test Mode + integrity monitoring</option></select></section>
 
-    <section className={styles.section}><h3>Full attempts</h3><div className={styles.compactField}><label>Full test attempts</label><input name="max_attempts" type="number" min="1" max="100" value={settings.maxAttempts} disabled={settings.unlimited||settings.paidAccess} onChange={e=>change('maxAttempts',Number(e.target.value)||1)}/><p className={styles.help}>2 = original attempt + 1 additional full attempt.</p></div><label className={styles.optionRow}><input type="checkbox" name="unlimited_attempts_until_due" checked={settings.unlimited} disabled={settings.paidAccess} onChange={e=>change('unlimited',e.target.checked)}/><span><b>Unlimited full attempts until due date</b></span></label><p className={styles.help}>When another full attempt is allowed, CramLoop builds a fresh retest from the approved pool where possible.</p></section>
+    <section className={styles.section}><h3>Full attempts</h3><div className={styles.compactField}><label>Full test attempts</label><select value={attemptChoice} disabled={settings.paidAccess} onChange={e=>changeAttemptChoice(e.target.value)}>{Array.from({length:10},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}{n===1?' attempt':' attempts'}</option>)}<option value="unlimited">Unlimited until due date</option><option value="custom">Custom…</option></select>{attemptChoice==='custom'&&<><label>Custom attempt count</label><input name="max_attempts" type="number" min="1" max="100" inputMode="numeric" value={customAttempts} onChange={e=>changeCustomAttempts(Number(e.target.value))}/></>}{attemptChoice!=='custom'&&<input type="hidden" name="max_attempts" value={settings.maxAttempts}/>}<input type="hidden" name="unlimited_attempts_until_due" value={attemptChoice==='unlimited'?'on':''}/><p className={styles.help}>{attemptChoice==='unlimited'?'Students can keep taking fresh full attempts until the due date.':`${settings.maxAttempts} = original attempt${settings.maxAttempts>1?` + ${settings.maxAttempts-1} additional full attempt${settings.maxAttempts-1===1?'':'s'}`:''}.`}</p></div><p className={styles.help}>When another full attempt is allowed, CramLoop builds a fresh retest from the approved pool where possible.</p></section>
 
     <section className={styles.section}><h3>After a failed full attempt</h3><label className={styles.optionRow}><input type="checkbox" name="require_focused_retake_before_full" checked={settings.requireFocused} onChange={e=>change('requireFocused',e.target.checked)}/><span><b>Require a focused retest before another full attempt</b></span></label><div className={styles.twoCol}><div><label>Focused retest size</label><select name="focused_retake_percent" value={settings.focusedPercent} onChange={e=>change('focusedPercent',Number(e.target.value))}>{[10,20,30,40,50,60,70,80,90,100].map(n=><option key={n} value={n}>{n}% of full test</option>)}</select><p className={styles.help}>About {focusedCount} focused question{focusedCount===1?'':'s'}.</p></div><div><label>Grade required to proceed</label><select name="focused_retake_min_score" value={settings.focusedMinScore} onChange={e=>change('focusedMinScore',Number(e.target.value))}>{Array.from({length:101},(_,n)=><option key={n} value={n}>{n}%{n===0?' · completion only':''}</option>)}</select><p className={styles.help}>{settings.focusedMinScore===0?'Completion alone unlocks the next full attempt.':`${settings.focusedMinScore}% is required to unlock the next full attempt.`}</p></div></div><label className={styles.optionRow}><input type="checkbox" name="focused_retake_hints" checked={settings.focusedHints} onChange={e=>change('focusedHints',e.target.checked)}/><span><b>Show teaching hints on focused retests</b><small>Never shown on the full test. <a href="/help#focused-hints">Learn more</a></small></span></label></section>
 
