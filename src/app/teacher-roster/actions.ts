@@ -11,10 +11,12 @@ async function teacher(){
 
 export async function reviewConnectionRequest(requestId:string,approve:boolean,fd:FormData){
   const{supabase}=await teacher();const groupId=String(fd.get('group_id')||'').trim()||null
-  const{error}=await supabase.rpc('review_student_teacher_connection_request',{p_request_id:requestId,p_approve:approve,p_group_id:approve?groupId:null})
+  const{data,error}=await supabase.rpc('review_student_teacher_connection_request',{p_request_id:requestId,p_approve:approve,p_group_id:approve?groupId:null})
   if(error)redirect(`/teacher-roster?error=${encodeURIComponent(error.message)}`)
-  revalidatePath('/teacher-roster');revalidatePath('/teacher-groups');revalidatePath('/dashboard')
-  redirect('/teacher-roster?message='+encodeURIComponent(approve?'Student connection approved.':'Student connection declined.'))
+  revalidatePath('/teacher-roster');revalidatePath('/teacher-groups');revalidatePath('/student-progress');revalidatePath('/reports');revalidatePath('/dashboard')
+  if(!approve)redirect('/teacher-roster?message='+encodeURIComponent('Student connection declined.'))
+  const groupName=(data as any)?.group_name
+  redirect('/teacher-roster?message='+encodeURIComponent(groupName?`Student approved and added to ${groupName}. Assigned class work will appear on their dashboard.`:'Student approved and connected to your roster.'))
 }
 
 export async function addStudentEmail(fd:FormData){
