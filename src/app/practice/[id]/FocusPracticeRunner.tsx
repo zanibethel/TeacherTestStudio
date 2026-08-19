@@ -3,7 +3,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react'
 import './focus.css'
 
-type FocusQuestion={question_id:string;question_position:number;prompt:string;content_area:string|null;choices:string[];focused_retake_hint:string|null}
+type FocusQuestion={question_id:string;question_position:number;prompt:string;content_area:string|null;choices:string[];focused_retake_hint:string|null;previous_answer:string|null}
 type Props={title:string;questions:FocusQuestion[];showHints:boolean;required:boolean;minScore:number;action:(formData:FormData)=>void}
 
 export default function FocusPracticeRunner({title,questions,showHints,required,minScore,action}:Props){
@@ -48,6 +48,7 @@ export default function FocusPracticeRunner({title,questions,showHints,required,
       <section className="focus-question" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         <div className="focus-question-meta"><span>Question {current+1} of {questions.length}</span>{question.content_area&&<span>{question.content_area}</span>}</div>
         <h2>{question.prompt}</h2>
+        {question.previous_answer&&<div className="focus-previous-answer"><span>Previous answer</span><b>{question.previous_answer}</b></div>}
         {showHints&&question.focused_retake_hint&&<div className="focus-hint-wrap"><button type="button" className="focus-hint-button" onClick={()=>setOpenHint(openHint===question.question_id?null:question.question_id)}>{openHint===question.question_id?'Hide hint':'Show hint'}</button>{openHint===question.question_id&&<p className="focus-hint">{question.focused_retake_hint}</p>}</div>}
         <div className="focus-answers">{question.choices.map((choice,i)=><label key={i} className={`focus-answer ${answers[question.question_id]===i?'selected':''}`}><input type="radio" checked={answers[question.question_id]===i} onChange={()=>choose(i)}/><span>{choice}</span></label>)}</div>
       </section>
