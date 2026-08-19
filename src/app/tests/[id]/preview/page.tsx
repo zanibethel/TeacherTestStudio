@@ -1,0 +1,11 @@
+import Link from 'next/link'
+import {notFound,redirect} from 'next/navigation'
+import {createClient} from '@/lib/supabase/server'
+
+export default async function TestPreview({params}:{params:Promise<{id:string}>}){
+ const{id}=await params;const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
+ const{data:profile}=await supabase.from('profiles').select('role,teacher_approved').eq('id',user.id).single();if(profile?.role!=='teacher'||!profile.teacher_approved)redirect('/dashboard')
+ const{data:test}=await supabase.from('tests').select('id,teacher_id,title,description,duration_minutes,passing_score_percent,one_question_per_page,randomize_questions,randomize_choices,questions(id,prompt,position,choices(id,label,position))').eq('id',id).single();if(!test||test.teacher_id!==user.id)notFound()
+ const questions=[...(test.questions??[])].sort((a:any,b:any)=>a.position-b.position)
+ return <main><div className="row between"><Link href="/dashboard">← Test library</Link><span className="pill">Teacher preview</span></div><section className="card"><h1>{test.title}</h1><p>{test.description||'No description'}</p><p className="muted">{test.duration_minutes?`${test.duration_minutes} minute timer · `:''}Passing score {test.passing_score_percent}% · {test.one_question_per_page?'One question per page':'Continuous test'} · {test.randomize_questions?'Question order randomized':'Fixed question order'} · {test.randomize_choices?'Choices randomized':'Fixed choice order'}</p></section><div className="notice"><b>Student view preview</b><p className="muted">This shows the test content without creating an attempt or revealing the answer key.</p></div>{questions.map((question:any,index:number)=>{const choices=[...(question.choices??[])].sort((a:any,b:any)=>a.position-b.position);return <section className="card" key={question.id}><h2>{index+1}. {question.prompt}</h2>{choices.map((choice:any)=><label className="check" key={choice.id}><input type="radio" disabled name={`preview_${question.id}`}/>{choice.label}</label>)}</section>})}<div className="row"><Link className="secondary button" href={`/tests/${id}/edit`}>✎ Edit</Link><Link className="button" href={`/tests/${id}`}>Share & settings</Link></div></main>
+}
