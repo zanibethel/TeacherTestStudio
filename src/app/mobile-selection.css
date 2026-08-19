@@ -1,0 +1,6 @@
+@media (hover:none) and (pointer:coarse){
+  body,main,header,footer,nav,section,article,aside,details,summary,label,button,.button,.button-like,.card,.row,.pill,.muted,h1,h2,h3,p,span,strong,b,small,li{ -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  input,textarea,[contenteditable="true"],.code,.selectable-text{ -webkit-user-select:text; user-select:text; -webkit-touch-callout:default; }
+  a,button,summary,label{ touch-action:manipulation; }
+  body,main{ touch-action:pan-y; }
+}
