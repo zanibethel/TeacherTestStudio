@@ -22,11 +22,16 @@ export async function importCollection(collectionId:string){
 
 async function refreshCollection(collectionId:string,returnTo:string){
   const supabase=await approvedTeacherClient()
-  const{data,error}=await supabase.rpc('refresh_my_shared_bank_questions',{p_collection_id:collectionId})
-  if(error)redirect(`${returnTo}?error=`+encodeURIComponent(error.message))
+  const{data:added,error:importError}=await supabase.rpc('import_shared_collection',{p_collection_id:collectionId})
+  if(importError)redirect(`${returnTo}?error=`+encodeURIComponent(importError.message))
+  const{data:updated,error:refreshError}=await supabase.rpc('refresh_my_shared_bank_questions',{p_collection_id:collectionId})
+  if(refreshError)redirect(`${returnTo}?error=`+encodeURIComponent(refreshError.message))
   revalidatePath('/question-bank');revalidatePath('/shared-library');revalidatePath(`/shared-library/${collectionId}`);revalidatePath('/tests/new')
-  const count=Number(data??0)
-  redirect(`${returnTo}?message=`+encodeURIComponent(count?`${count} question${count===1?'':'s'} refreshed from the shared library.`:'Your bank is already up to date.'))
+  const addCount=Number(added??0),updateCount=Number(updated??0)
+  const message=addCount||updateCount
+    ?`${addCount?`${addCount} new question${addCount===1?'':'s'} added. `:''}${updateCount?`${updateCount} existing question${updateCount===1?'':'s'} refreshed.`:''}`.trim()
+    :'Your bank is already up to date.'
+  redirect(`${returnTo}?message=`+encodeURIComponent(message))
 }
 
 export async function refreshCollectionFromLibrary(collectionId:string){
