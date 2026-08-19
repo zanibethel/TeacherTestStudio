@@ -20,6 +20,8 @@ export async function createTest(formData: FormData) {
   const focusedRetakeHints = formData.get('focused_retake_hints') === 'on'
   const unlimitedAttemptsUntilDue = formData.get('unlimited_attempts_until_due') === 'on'
   const maxAttempts = Number(formData.get('max_attempts') ?? 1)
+  const dueAtRaw = String(formData.get('due_at') ?? '').trim()
+  const dueAt = dueAtRaw || null
   let questions: unknown
   try { questions = JSON.parse(String(formData.get('questions') ?? '[]')) } catch { redirect('/tests/new?error=Invalid+question+data') }
   const { data, error } = await supabase.rpc('create_test_with_questions_v6', {
@@ -40,6 +42,7 @@ export async function createTest(formData: FormData) {
     p_focused_retake_hints: focusedRetakeHints,
     p_unlimited_attempts_until_due: unlimitedAttemptsUntilDue,
     p_max_attempts: maxAttempts,
+    p_due_at: dueAt,
   })
   if (error) redirect('/tests/new?error=' + encodeURIComponent(error.message))
   redirect(`/tests/${data}`)
