@@ -27,6 +27,7 @@ export default function AppMenu({role,canInvite,isAdmin}:{role:string|null;canIn
         <Link href="/suggest-content">Suggest CramLoop Content</Link>
         <Link href="/find-teacher">Find My Teacher</Link>
       </>}
+      <span className="menu-section-label">Support</span><Link href="/help">Help & FAQs</Link>
       {isAdmin&&<><span className="menu-section-label">Platform</span><Link href="/admin/content-health">Content Health</Link><Link href="/admin/bundles">Bundle Manager</Link><Link href="/admin/pricing">Special Pricing</Link><Link href="/admin/suggestions">Content Suggestions</Link></>}
       <form action="/auth/signout" method="post"><button className="menu-logout" type="submit">Log out</button></form>
     </nav>
