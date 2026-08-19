@@ -33,3 +33,14 @@ export async function signup(fd: FormData) {
   if (!data.session) redirect('/login?message=' + encodeURIComponent('Check your email to confirm your account, then sign in.'))
   redirect('/dashboard')
 }
+
+export async function requestPasswordReset(fd: FormData) {
+  const s = await createClient()
+  const email = String(fd.get('email') ?? '').trim()
+  if (!email) redirect('/login?error=' + encodeURIComponent('Enter your email address first.'))
+  const { error } = await s.auth.resetPasswordForEmail(email, {
+    redirectTo: `${SITE_URL}/auth/callback?next=/reset-password`,
+  })
+  if (error) redirect('/login?error=' + encodeURIComponent(error.message))
+  redirect('/login?message=' + encodeURIComponent('If an account exists for that email, a password reset link has been sent.'))
+}
