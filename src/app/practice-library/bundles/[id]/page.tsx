@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { selectPracticeBundleOption, startBundlePractice } from '../../actions'
+import { selectPracticeBundleOption, startBundlePractice, submitBundleReview } from '../../actions'
 
 function durationLabel(hours:number){
   if(hours===24)return '24 hours'
@@ -15,13 +15,15 @@ function readinessLabel(score:number|null){
   if(score>=70)return 'Getting ready'
   return 'Needs focus'
 }
+function stars(value:number){return '★'.repeat(Math.max(0,Math.min(5,Math.round(value))))+'☆'.repeat(Math.max(0,5-Math.round(value)))}
 
-export default async function PracticeBundleDetail({params,searchParams}:{params:Promise<{id:string}>,searchParams:Promise<{error?:string;selected?:string}>}){
+export default async function PracticeBundleDetail({params,searchParams}:{params:Promise<{id:string}>,searchParams:Promise<{error?:string;selected?:string;reviewed?:string}>}){
   const{id}=await params;const query=await searchParams;const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
   const{data:profile}=await supabase.from('profiles').select('role').eq('id',user.id).single();if(profile?.role!=='student')redirect('/dashboard')
-  const[{data:bundle,error},{data:readiness}]=await Promise.all([
+  const[{data:bundle,error},{data:readiness},{data:reviewData}]=await Promise.all([
     supabase.rpc('get_practice_bundle_detail',{p_bundle_id:id}),
-    supabase.rpc('get_bundle_readiness',{p_bundle_id:id})
+    supabase.rpc('get_bundle_readiness',{p_bundle_id:id}),
+    supabase.rpc('get_practice_bundle_reviews',{p_bundle_id:id})
   ]);if(error||!bundle?.id)notFound()
   const activePass=['paid','comped'].includes(bundle.entitlement_status??'')&&(!bundle.entitlement_expires_at||new Date(bundle.entitlement_expires_at).getTime()>Date.now())
   const resources=Array.isArray(bundle.resources)?bundle.resources:[]
@@ -31,12 +33,22 @@ export default async function PracticeBundleDetail({params,searchParams}:{params
   const recommended=resources.find((r:any)=>r.id===readiness?.recommended_collection_id)
   const recommendedUnlocked=Boolean(recommended&&(activePass||recommended.is_free_preview))
   const currentLabel=monthYear(bundle.current_as_of)
+  const reviews=Array.isArray(reviewData?.reviews)?reviewData.reviews:[]
+  const avgRating=reviewData?.average_rating==null?null:Number(reviewData.average_rating)
+  const reviewCount=Number(reviewData?.review_count||0)
+  const myReview=reviewData?.user_review
   return <main>
     <Link href="/practice-library">← Practice library</Link>
     <div className="row between"><div><h1>{bundle.title}</h1><p className="muted">{bundle.subject}</p></div><span className="pill">{activePass?'Pass active':bundle.verified?'CramLoop Verified':'Cram & prep access'}</span></div>
-    {query.error&&<p className="bad">{query.error}</p>}{query.selected&&<p className="good">Access option selected. Checkout will activate the timed access window once payments are connected.</p>}
+    {query.error&&<p className="bad">{query.error}</p>}{query.selected&&<p className="good">Access option selected. Checkout will activate the timed access window once payments are connected.</p>}{query.reviewed&&<p className="good">Thanks. Your review has been saved.</p>}
 
     {bundle.verified&&<section className="card"><div className="row between"><div><h2 style={{marginBottom:4}}>✓ CramLoop Verified</h2><p className="muted">This platform bundle has been deliberately reviewed for its stated exam or skill goal.</p></div><span className="pill">Version {bundle.content_version||'1.0'}</span></div><div className="grid two"><div><span className="muted">Current as of</span><p><b>{currentLabel||'Review date not published'}</b></p></div><div><span className="muted">Last platform review</span><p><b>{bundle.reviewed_at?new Date(bundle.reviewed_at).toLocaleDateString():'—'}</b></p></div></div>{bundle.alignment_note&&<><span className="muted">Alignment</span><p>{bundle.alignment_note}</p></>}</section>}
+
+    <section className="card">
+      <div className="row between"><div><h2 style={{marginBottom:4}}>Student experience</h2><p className="muted">Reviews come only from students who completed practice in this bundle. Ratings do not determine CramLoop Verified status.</p></div>{reviewCount>0&&<span className="pill">{avgRating?.toFixed(1)} / 5</span>}</div>
+      {reviewCount>0?<><p><b>{stars(avgRating||0)} {avgRating?.toFixed(1)}</b> <span className="muted">from {reviewCount} verified practice review{reviewCount===1?'':'s'}</span></p>{reviews.length>0&&<div className="stack">{reviews.map((r:any,i:number)=><div className="question-summary" key={`${r.updated_at}-${i}`}><div className="row between"><b>{stars(Number(r.rating))}</b><span className="muted">{new Date(r.updated_at).toLocaleDateString()}</span></div><p>{r.comment}</p></div>)}</div>}</>:<p className="muted">No student reviews yet.</p>}
+      {reviewData?.can_review?<form action={submitBundleReview.bind(null,id)} className="stack" style={{marginTop:16}}><h3>{myReview?'Update your review':'Review this bundle'}</h3><label>Rating<select name="rating" defaultValue={String(myReview?.rating||5)}><option value="5">5 — Excellent</option><option value="4">4 — Good</option><option value="3">3 — Fair</option><option value="2">2 — Needs work</option><option value="1">1 — Poor</option></select></label><label>Optional feedback<textarea name="comment" maxLength={500} rows={3} defaultValue={myReview?.comment||''} placeholder="Was the content useful, clear, and relevant to what you are preparing for?"/></label><button type="submit">{myReview?'Update review':'Submit review'}</button></form>:<p className="muted">Complete at least one practice session in this bundle to leave a review.</p>}
+    </section>
 
     <section className="card">
       <div className="row between"><div><h2 style={{marginBottom:4}}>Your readiness</h2><p className="muted">Based on your actual CramLoop practice in this bundle. Recent sessions count more heavily.</p></div><span className="pill">{readinessLabel(readinessScore)}</span></div>
