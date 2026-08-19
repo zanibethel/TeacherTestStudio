@@ -2,11 +2,11 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
-export async function selectPracticeBundle(bundleId:string){
+export async function selectPracticeBundleOption(bundleId:string,optionId:string){
   const supabase=await createClient()
   const{data:{user}}=await supabase.auth.getUser()
   if(!user)redirect('/login')
-  const{error}=await supabase.rpc('select_practice_bundle',{p_bundle_id:bundleId})
+  const{error}=await supabase.rpc('select_practice_bundle_option',{p_bundle_id:bundleId,p_option_id:optionId})
   if(error)redirect(`/practice-library/bundles/${bundleId}?error=${encodeURIComponent(error.message)}`)
   redirect(`/practice-library/bundles/${bundleId}?selected=1`)
 }
