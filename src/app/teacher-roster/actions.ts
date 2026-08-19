@@ -10,10 +10,10 @@ async function teacher(){
 }
 
 export async function addStudentEmail(fd:FormData){
-  const{supabase}=await teacher();const email=String(fd.get('email')||'').trim().toLowerCase()
-  const{error}=await supabase.rpc('add_teacher_student_email',{p_email:email})
+  const{supabase}=await teacher();const email=String(fd.get('email')||'').trim().toLowerCase();const firstName=String(fd.get('first_name')||'').trim();const lastName=String(fd.get('last_name')||'').trim()
+  const{error}=await supabase.rpc('add_teacher_student_email',{p_email:email,p_first_name:firstName||null,p_last_name:lastName||null})
   if(error)redirect(`/teacher-roster?error=${encodeURIComponent(error.message)}`)
-  revalidatePath('/teacher-roster');redirect('/teacher-roster?message='+encodeURIComponent('Student email added to your roster.'))
+  revalidatePath('/teacher-roster');redirect('/teacher-roster?message='+encodeURIComponent('Student added to your roster.'))
 }
 
 export async function removeStudent(rosterId:string){
