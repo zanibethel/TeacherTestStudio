@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
+function monthYear(value:string|null|undefined){if(!value)return null;const d=new Date(`${value}T00:00:00`);return d.toLocaleDateString(undefined,{month:'long',year:'numeric'})}
+
 export default async function PracticeLibrary({searchParams}:{searchParams:Promise<{q?:string;category?:string}>}){
   const query=await searchParams
   const q=String(query.q??'').trim().toLowerCase()
@@ -40,7 +42,7 @@ export default async function PracticeLibrary({searchParams}:{searchParams:Promi
   return <main>
     <Link href="/dashboard">← Dashboard</Link>
     <h1>Practice library</h1>
-    <p className="muted">Find a subject, try its free previews, then choose a short cram session or a longer prep window when you want the full bundle.</p>
+    <p className="muted">CramLoop platform bundles are curated separately from teacher-created material so students can clearly see what has been reviewed for a specific exam or skill goal.</p>
 
     <section className="catalog-tools" aria-label="Practice bundle filters">
       <form className="catalog-search" method="get">
@@ -59,8 +61,10 @@ export default async function PracticeLibrary({searchParams}:{searchParams:Promi
       {filtered.map((b:any)=>{
         const active=['paid','comped'].includes(b.entitlement_status??'')&&(!b.entitlement_expires_at||new Date(b.entitlement_expires_at).getTime()>Date.now())
         const previews=previewsByBundle.get(String(b.bundle_id))??[]
+        const currentLabel=monthYear(b.current_as_of)
         return <section className="card bundle-card" key={b.bundle_id}>
-          <div className="row between"><div><h3>{b.title}</h3><p className="muted">{b.category||'Other'} · {b.subject} · {b.resource_count} included resource{b.resource_count===1?'':'s'}</p></div><span className="pill">{active?'Access active':'24-hour cram available'}</span></div>
+          <div className="row between"><div><h3>{b.title}</h3><p className="muted">{b.category||'Other'} · {b.subject} · {b.resource_count} included resource{b.resource_count===1?'':'s'}</p></div><span className="pill">{active?'Access active':b.verified?'CramLoop Verified':'Cram & prep'}</span></div>
+          {b.verified&&<div className="question-summary"><b>✓ CramLoop Verified</b><p className="muted">Content version {b.content_version||'1.0'}{currentLabel?` · Current as of ${currentLabel}`:''}</p>{b.alignment_note&&<p className="muted">{b.alignment_note}</p>}</div>}
           <p>{b.description}</p>
           <p><b>24-hour, 3-day, 7-day, or 14-day access</b></p>
           {active&&b.entitlement_expires_at&&<p className="good">Active through {new Date(b.entitlement_expires_at).toLocaleString()}</p>}
@@ -73,6 +77,6 @@ export default async function PracticeLibrary({searchParams}:{searchParams:Promi
       })}
     </div>}
 
-    <section className="card privacy-note"><h2>Teacher-created practice stays private</h2><p className="muted">Teacher classroom tests and paid teacher shares never appear in this public catalog. Students reach them only through the teacher's specific link or assignment.</p>{profile?.role==='teacher'&&<Link href="/shared-library">Open teacher resource library →</Link>}</section>
+    <section className="card privacy-note"><h2>Teacher-created resources stay separate</h2><p className="muted">Teacher classroom tests and shared teacher resources do not automatically enter this primary catalog. CramLoop Verified status is assigned only after deliberate platform review.</p>{profile?.role==='teacher'&&<Link href="/shared-library">Open teacher resource library →</Link>}</section>
   </main>
 }
