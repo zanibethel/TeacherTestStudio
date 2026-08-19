@@ -29,14 +29,16 @@ export default async function AppHeader(){
             <Link href="/teacher-groups">Groups</Link>
             <Link href="/shared-library">Browse Test Bundles</Link>
             <Link href="/question-bank">Question Bank</Link>
+            <Link href="/suggest-content">Suggest CramLoop Content</Link>
             {canInvite&&<Link href="/teacher-access">Teacher Access</Link>}
           </>:<>
             <Link href="/dashboard">Dashboard</Link>
             <Link href="/my-passes">My Passes</Link>
             <Link href="/practice-library">Browse Practice Passes</Link>
+            <Link href="/suggest-content">Suggest CramLoop Content</Link>
             <Link href="/find-teacher">Find My Teacher</Link>
           </>}
-          {isAdmin&&<><span className="menu-section-label">Platform</span><Link href="/admin/bundles">Bundle Manager</Link><Link href="/admin/pricing">Special Pricing</Link></>}
+          {isAdmin&&<><span className="menu-section-label">Platform</span><Link href="/admin/bundles">Bundle Manager</Link><Link href="/admin/pricing">Special Pricing</Link><Link href="/admin/suggestions">Content Suggestions</Link></>}
           <form action="/auth/signout" method="post"><button className="menu-logout" type="submit">Log out</button></form>
         </nav>
       </details>}
