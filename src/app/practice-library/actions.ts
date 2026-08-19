@@ -1,4 +1,5 @@
 'use server'
+import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
@@ -19,4 +20,16 @@ export async function startBundlePractice(bundleId:string,collectionId:string,fd
   const{data,error}=await supabase.rpc('create_bundle_practice_session',{p_bundle_id:bundleId,p_collection_id:collectionId,p_question_count:count})
   if(error)redirect(`/practice-library/bundles/${bundleId}?error=${encodeURIComponent(error.message)}`)
   redirect(`/practice/${data}`)
+}
+
+export async function submitBundleReview(bundleId:string,fd:FormData){
+  const supabase=await createClient()
+  const{data:{user}}=await supabase.auth.getUser()
+  if(!user)redirect('/login')
+  const rating=Number(fd.get('rating')||0)
+  const comment=String(fd.get('comment')??'').trim()
+  const{error}=await supabase.rpc('submit_practice_bundle_review',{p_bundle_id:bundleId,p_rating:rating,p_comment:comment||null})
+  if(error)redirect(`/practice-library/bundles/${bundleId}?error=${encodeURIComponent(error.message)}`)
+  revalidatePath(`/practice-library/bundles/${bundleId}`)
+  redirect(`/practice-library/bundles/${bundleId}?reviewed=1`)
 }
