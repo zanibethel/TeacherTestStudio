@@ -2,7 +2,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
-const SITE_URL = 'https://teacher-test-studio.vercel.app'
+const SITE_URL = 'https://cramloop.app'
 
 export async function login(fd: FormData) {
   const s = await createClient()
