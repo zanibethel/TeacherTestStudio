@@ -5,6 +5,8 @@ import { createShareOffer, saveDeliveryControls, setShareActive, setTestStatus }
 
 function localInput(value:string|null){if(!value)return'';const d=new Date(value);const pad=(n:number)=>String(n).padStart(2,'0');return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`}
 
+type StudentSummaryRow={name:string;best:number;attempts:any[]}
+
 export default async function TestDetail({params,searchParams}:{params:Promise<{id:string}>,searchParams:Promise<{error?:string}>}){
   const{id}=await params;const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
   const{data:profile}=await supabase.from('profiles').select('teacher_plan,teacher_plan_expires_at').eq('id',user.id).single()
@@ -17,8 +19,8 @@ export default async function TestDetail({params,searchParams}:{params:Promise<{
   const assignedIds=new Set((assigned??[]).map((a:any)=>a.student_id));const query=await searchParams
   const questions=[...(test.questions??[])].sort((a:any,b:any)=>a.position-b.position);const attempts=[...(test.attempts??[])].sort((a:any,b:any)=>String(b.submitted_at).localeCompare(String(a.submitted_at)))
   const completed=attempts.filter((a:any)=>a.submitted_at)
-  const studentSummary=new Map<string,{name:string;best:number;attempts:any[]}>()
-  for(const a of completed){const student=Array.isArray(a.student)?a.student[0]:a.student;const key=a.student_id;const row=studentSummary.get(key)||{name:student?.full_name||'Student',best:0,attempts:[]};row.best=Math.max(row.best,Number(a.score_percent||0));row.attempts.push(a);studentSummary.set(key,row)}
+  const studentSummary=new Map<string,StudentSummaryRow>()
+  for(const a of completed){const student=Array.isArray(a.student)?a.student[0]:a.student;const key=String(a.student_id);const row:StudentSummaryRow=studentSummary.get(key)??{name:student?.full_name||'Student',best:0,attempts:[]};row.best=Math.max(row.best,Number(a.score_percent||0));row.attempts.push(a);studentSummary.set(key,row)}
   const shareUrl=`https://teacher-test-studio.vercel.app/take/${id}`
   return <main>
     <Link href="/dashboard">← Dashboard</Link>
