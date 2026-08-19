@@ -29,10 +29,11 @@ export default async function PracticeLibrary({searchParams}:{searchParams:Promi
     current.push({...resource,position:link.position})
     previewsByBundle.set(String(link.bundle_id),current)
   }
-  const categories:string[]=Array.from(new Set<string>(bundleRows.map((b:any)=>String(b.subject??'')).filter((value:string)=>Boolean(value)))).sort()
+  const categories:string[]=Array.from(new Set<string>(bundleRows.map((b:any)=>String(b.category||'Other')).filter(Boolean))).sort()
   const filtered=bundleRows.filter((b:any)=>{
-    const matchesCategory=!category||b.subject===category
-    const haystack=`${b.title} ${b.subject} ${b.description??''}`.toLowerCase()
+    const bundleCategory=String(b.category||'Other')
+    const matchesCategory=!category||bundleCategory===category
+    const haystack=`${b.title} ${b.subject} ${bundleCategory} ${b.description??''}`.toLowerCase()
     return matchesCategory&&(!q||haystack.includes(q))
   })
 
@@ -59,7 +60,7 @@ export default async function PracticeLibrary({searchParams}:{searchParams:Promi
         const active=['paid','comped'].includes(b.entitlement_status??'')&&(!b.entitlement_expires_at||new Date(b.entitlement_expires_at).getTime()>Date.now())
         const previews=previewsByBundle.get(String(b.bundle_id))??[]
         return <section className="card bundle-card" key={b.bundle_id}>
-          <div className="row between"><div><h3>{b.title}</h3><p className="muted">{b.subject} · {b.resource_count} included resource{b.resource_count===1?'':'s'}</p></div><span className="pill">{active?'Access active':'24-hour cram available'}</span></div>
+          <div className="row between"><div><h3>{b.title}</h3><p className="muted">{b.category||'Other'} · {b.subject} · {b.resource_count} included resource{b.resource_count===1?'':'s'}</p></div><span className="pill">{active?'Access active':'24-hour cram available'}</span></div>
           <p>{b.description}</p>
           <p><b>24-hour, 3-day, 7-day, or 14-day access</b></p>
           {active&&b.entitlement_expires_at&&<p className="good">Active through {new Date(b.entitlement_expires_at).toLocaleString()}</p>}
