@@ -7,6 +7,20 @@ type AnyRow=Record<string,any>
 
 function rosterName(r:AnyRow){return [r.student_first_name,r.student_last_name].filter(Boolean).join(' ').trim()||r.student_email||'Student'}
 function pct(v:any){return v==null?null:Math.round(Number(v))}
+function urgency(status:string,pastDue:boolean,dueSoon:boolean){
+  if(pastDue&&status==='Not started')return 100
+  if(status==='Focused retest required')return 95
+  if(status==='Focused retest in progress')return 90
+  if(status==='Needs review')return 85
+  if(status==='Not started'&&dueSoon)return 80
+  if(status==='Needs another attempt')return 75
+  if(status==='In progress'&&pastDue)return 70
+  if(status==='In progress')return 55
+  if(status==='Full retest unlocked')return 45
+  if(status==='Not started')return 35
+  if(status==='Complete')return 0
+  return 20
+}
 
 export default async function TeacherProgress({searchParams}:{searchParams:Promise<{group?:string}>}){
   const query=await searchParams
@@ -31,7 +45,6 @@ export default async function TeacherProgress({searchParams}:{searchParams:Promi
   ])
 
   const rosterById=new Map((roster??[]).map((r:AnyRow)=>[String(r.id),r]))
-  const rosterByStudent=new Map((roster??[]).filter((r:AnyRow)=>r.student_id).map((r:AnyRow)=>[String(r.student_id),r]))
   const groupById=new Map((groups??[]).map((g:AnyRow)=>[String(g.id),g]))
   const membersByGroup=new Map<string,string[]>()
   for(const m of members??[]){const gid=String((m as AnyRow).group_id);membersByGroup.set(gid,[...(membersByGroup.get(gid)??[]),String((m as AnyRow).roster_id)])}
@@ -49,6 +62,9 @@ export default async function TeacherProgress({searchParams}:{searchParams:Promi
     for(const gid of shareGroupIds)for(const rid of membersByGroup.get(gid)??[])assigned.add(rid)
     if(!assigned.size)return []
     const test=Array.isArray(share.test)?share.test[0]:share.test
+    const dueMs=share.due_at?new Date(share.due_at).getTime():null
+    const pastDue=dueMs!=null&&dueMs<=now
+    const dueSoon=dueMs!=null&&!pastDue&&dueMs-now<=48*60*60*1000
     const rows=[...assigned].map(rid=>{
       const r=rosterById.get(rid);if(!r)return null
       const related=(attemptsByShare.get(String(share.id))??[]).filter(a=>r.student_id&&String(a.student_id)===String(r.student_id))
@@ -62,8 +78,6 @@ export default async function TeacherProgress({searchParams}:{searchParams:Promi
       const activeFocus=focused.find(p=>p.status==='active')
       const gateMet=focused.some(p=>p.status==='submitted'&&Number(p.score_percent??0)>=Number(share.focused_retake_min_score??0))
       const latestFailed=latest&&Number(latest.score_percent??0)<passing
-      const dueMs=share.due_at?new Date(share.due_at).getTime():null
-      const pastDue=dueMs!=null&&dueMs<=now
       let status='Not started',tone='neutral'
       if(active){status='In progress';tone='active'}
       else if(passed){status='Complete';tone='complete'}
@@ -71,27 +85,37 @@ export default async function TeacherProgress({searchParams}:{searchParams:Promi
       else if(latestFailed&&gateMet&&share.randomized_retest_enabled){status='Full retest unlocked';tone='ready'}
       else if(latestFailed){status=pastDue?'Needs review':'Needs another attempt';tone='warning'}
       const latestPractice=[...focused].sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime())[0]
-      return{r,status,tone,highest,attempts:submitted.length+(active?1:0),latest,weakAreas:(latestPractice?.selected_areas??[]) as string[]}
-    }).filter(Boolean) as AnyRow[]
-    const counts={notStarted:rows.filter(x=>x.status==='Not started').length,inProgress:rows.filter(x=>x.status==='In progress').length,focus:rows.filter(x=>String(x.status).startsWith('Focused')).length,ready:rows.filter(x=>x.status==='Full retest unlocked').length,complete:rows.filter(x=>x.status==='Complete').length}
-    return[{share,test,rows,shareGroupIds,counts}]
-  })
+      const weakAreas=(latestPractice?.selected_areas??[]) as string[]
+      return{r,status,tone,highest,attempts:submitted.length+(active?1:0),latest,weakAreas,pastDue,dueSoon,urgency:urgency(status,pastDue,dueSoon)}
+    }).filter(Boolean).sort((a:AnyRow,b:AnyRow)=>b.urgency-a.urgency||rosterName(a.r).localeCompare(rosterName(b.r))) as AnyRow[]
+    const counts={notStarted:rows.filter(x=>x.status==='Not started').length,inProgress:rows.filter(x=>x.status==='In progress').length,focus:rows.filter(x=>String(x.status).startsWith('Focused')).length,ready:rows.filter(x=>x.status==='Full retest unlocked').length,complete:rows.filter(x=>x.status==='Complete').length,attention:rows.filter(x=>x.urgency>=70).length}
+    const maxUrgency=rows.length?Math.max(...rows.map(x=>x.urgency)):0
+    return[{share,test,rows,shareGroupIds,counts,maxUrgency,pastDue,dueSoon}]
+  }).sort((a:AnyRow,b:AnyRow)=>b.maxUrgency-a.maxUrgency||new Date(b.share.created_at).getTime()-new Date(a.share.created_at).getTime())
 
-  const totals={students:(roster??[]).filter((r:AnyRow)=>r.student_id).length,notStarted:0,inProgress:0,focus:0,ready:0,complete:0}
-  for(const a of assignmentCards){totals.notStarted+=a.counts.notStarted;totals.inProgress+=a.counts.inProgress;totals.focus+=a.counts.focus;totals.ready+=a.counts.ready;totals.complete+=a.counts.complete}
+  const totals={students:(roster??[]).filter((r:AnyRow)=>r.student_id).length,notStarted:0,inProgress:0,focus:0,ready:0,complete:0,attention:0}
+  const weakAreaCounts=new Map<string,number>()
+  for(const a of assignmentCards){
+    totals.notStarted+=a.counts.notStarted;totals.inProgress+=a.counts.inProgress;totals.focus+=a.counts.focus;totals.ready+=a.counts.ready;totals.complete+=a.counts.complete;totals.attention+=a.counts.attention
+    for(const row of a.rows)for(const area of row.weakAreas??[])weakAreaCounts.set(area,(weakAreaCounts.get(area)??0)+1)
+  }
+  const recurringWeakAreas=[...weakAreaCounts.entries()].filter(([,count])=>count>1).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).slice(0,8)
 
   return <main className="teacher-progress-page">
     <div className="row between progress-heading"><div><Link href="/dashboard">← Teacher dashboard</Link><h1>Student progress</h1><p className="muted">See who needs attention first, then expand an assignment or student only when you need more detail.</p></div><Link className="secondary button" href="/reports">All assignment reports</Link></div>
 
     <section className="progress-summary">
-      <div><span>Connected students</span><b>{totals.students}</b></div><div><span>Not started</span><b>{totals.notStarted}</b></div><div><span>In progress</span><b>{totals.inProgress}</b></div><div><span>Focused retest</span><b>{totals.focus}</b></div><div><span>Full retest ready</span><b>{totals.ready}</b></div><div><span>Complete</span><b>{totals.complete}</b></div>
+      <div className="attention"><span>Needs attention</span><b>{totals.attention}</b></div><div><span>Connected students</span><b>{totals.students}</b></div><div><span>Not started</span><b>{totals.notStarted}</b></div><div><span>In progress</span><b>{totals.inProgress}</b></div><div><span>Focused retest</span><b>{totals.focus}</b></div><div><span>Full retest ready</span><b>{totals.ready}</b></div><div><span>Complete</span><b>{totals.complete}</b></div>
     </section>
 
     {(groups??[]).length>0&&<nav className="progress-group-filter" aria-label="Filter by class"><Link className={!selectedGroup?'active':''} href="/teacher-progress">All classes</Link>{(groups??[]).map((g:AnyRow)=><Link className={selectedGroup===String(g.id)?'active':''} key={g.id} href={`/teacher-progress?group=${g.id}`}>{g.name}</Link>)}</nav>}
 
-    {!assignmentCards.length?<section className="card"><h2>No assigned class work yet</h2><p className="muted">Once you share a test to a group or selected student, progress will appear here automatically.</p></section>:assignmentCards.map(({share,test,rows,shareGroupIds,counts}:AnyRow)=><details className="card progress-assignment" key={share.id} open={assignmentCards.length===1}>
-      <summary><div><span className="eyebrow">{share.experience_name||'Assignment'}</span><h2>{share.label||test?.title||'Assignment'}</h2>{share.label&&<p className="muted">{test?.title}</p>}<p className="muted">{shareGroupIds.map((id:string)=>groupById.get(id)?.name).filter(Boolean).join(', ')||'Selected students'} · {share.due_at?`Due ${new Date(share.due_at).toLocaleString()}`:'No due date'}</p></div><div className="progress-assignment-counts"><span>{counts.notStarted} not started</span><span>{counts.focus} remediation</span><span>{counts.complete} complete</span></div></summary>
-      <div className="progress-student-list">{rows.map((x:AnyRow)=><details className={`progress-student ${x.tone}`} key={x.r.id}><summary><div><b>{rosterName(x.r)}</b><span>{x.r.student_email}</span></div><div className="progress-student-right">{x.highest!=null&&<strong>{pct(x.highest)}%</strong>}<span className="progress-status">{x.status}</span></div></summary><div className="progress-student-detail"><p><b>{x.attempts}</b> attempt{x.attempts===1?'':'s'} started{x.highest!=null?` · Highest grade ${pct(x.highest)}%`:''}</p>{x.weakAreas.length>0&&<div><b>Current weak areas</b><div className="progress-area-list">{x.weakAreas.slice(0,6).map((area:string)=><span className="pill" key={area}>{area}</span>)}</div></div>}<div className="row"><Link className="secondary button" href={`/reports?student=roster:${x.r.id}`}>Student reports</Link>{x.latest&&<Link className="secondary button" href={`/attempts/${x.latest.id}`}>Latest attempt</Link>}</div></div></details>)}</div>
+    {recurringWeakAreas.length>0&&<section className="card progress-weak-summary"><div><span className="eyebrow">CLASS PATTERNS</span><h2>Repeated weak areas</h2><p className="muted">These topics are showing up across more than one student&apos;s current remediation work.</p></div><div className="progress-weak-grid">{recurringWeakAreas.map(([area,count])=><div key={area}><b>{area}</b><span>{count} students</span></div>)}</div></section>}
+
+    {!assignmentCards.length?<section className="card"><h2>No assigned class work yet</h2><p className="muted">Once you share a test to a group or selected student, progress will appear here automatically.</p></section>:assignmentCards.map(({share,test,rows,shareGroupIds,counts,pastDue,dueSoon}:AnyRow)=><details className="card progress-assignment" key={share.id} open={assignmentCards.length===1||counts.attention>0}>
+      <summary><div><span className="eyebrow">{share.experience_name||'Assignment'}</span><h2>{share.label||test?.title||'Assignment'}</h2>{share.label&&<p className="muted">{test?.title}</p>}<p className="muted">{shareGroupIds.map((id:string)=>groupById.get(id)?.name).filter(Boolean).join(', ')||'Selected students'} · {share.due_at?`Due ${new Date(share.due_at).toLocaleString()}`:'No due date'}</p>{pastDue&&<span className="progress-deadline overdue">Past due</span>}{dueSoon&&<span className="progress-deadline soon">Due within 48 hours</span>}</div><div className="progress-assignment-counts">{counts.attention>0&&<span className="attention">{counts.attention} need attention</span>}<span>{counts.notStarted} not started</span><span>{counts.focus} remediation</span><span>{counts.complete} complete</span></div></summary>
+      <div className="progress-assignment-toolbar"><Link href={`/reports?assignment=${share.id}`}>Open assignment report →</Link></div>
+      <div className="progress-student-list">{rows.map((x:AnyRow)=><details className={`progress-student ${x.tone}`} key={x.r.id}><summary><div><b>{rosterName(x.r)}</b><span>{x.r.student_email}</span></div><div className="progress-student-right">{x.highest!=null&&<strong>{pct(x.highest)}%</strong>}<span className="progress-status">{x.status}</span></div></summary><div className="progress-student-detail">{x.pastDue&&x.status!=='Complete'&&<p className="progress-callout bad"><b>Past due:</b> this student still has unfinished work.</p>}{x.dueSoon&&x.status==='Not started'&&<p className="progress-callout warn"><b>Due soon:</b> assignment has not been started.</p>}<p><b>{x.attempts}</b> attempt{x.attempts===1?'':'s'} started{x.highest!=null?` · Highest grade ${pct(x.highest)}%`:''}</p>{x.weakAreas.length>0&&<div><b>Current weak areas</b><div className="progress-area-list">{x.weakAreas.slice(0,6).map((area:string)=><span className="pill" key={area}>{area}</span>)}</div></div>}<div className="row"><Link className="secondary button" href={`/reports?assignment=${share.id}&student=roster:${x.r.id}`}>Assignment + student report</Link>{x.latest&&<Link className="secondary button" href={`/attempts/${x.latest.id}`}>Latest attempt</Link>}</div></div></details>)}</div>
     </details>)}
   </main>
 }
