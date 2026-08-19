@@ -11,7 +11,7 @@ export default function FocusPracticeRunner({title,questions,showHints,required,
   const[answers,setAnswers]=useState<Record<string,number>>({})
   const[openHint,setOpenHint]=useState<string|null>(null)
   const stripRef=useRef<HTMLDivElement>(null)
-  const touchStart=useRef<{x:number;y:number}|null>(null)
+  const touchStart=useRef<{x:number;y:number;target:EventTarget|null}|null>(null)
   const answeredCount=useMemo(()=>Object.keys(answers).length,[answers])
   const question=questions[current]
   const unanswered=questions.map((q,i)=>answers[q.question_id]===undefined?i:-1).filter(i=>i>=0)
@@ -29,11 +29,13 @@ export default function FocusPracticeRunner({title,questions,showHints,required,
     const nextOpen=unanswered.find(i=>i!==current)
     if(nextOpen!==undefined)setCurrent(nextOpen)
   }
-  function onTouchStart(e:React.TouchEvent){const t=e.touches[0];touchStart.current={x:t.clientX,y:t.clientY}}
+  function onTouchStart(e:React.TouchEvent){const t=e.touches[0];touchStart.current={x:t.clientX,y:t.clientY,target:e.target}}
   function onTouchEnd(e:React.TouchEvent){
     const start=touchStart.current;if(!start)return
     const t=e.changedTouches[0],dx=t.clientX-start.x,dy=t.clientY-start.y;touchStart.current=null
     if(Math.abs(dx)<55||Math.abs(dx)<Math.abs(dy)*1.25)return
+    const target=start.target as HTMLElement|null
+    if(target?.closest('button'))return
     if(dx<0)next();else previous()
   }
   const atEnd=current===questions.length-1
@@ -41,17 +43,20 @@ export default function FocusPracticeRunner({title,questions,showHints,required,
   const nextLabel=atEnd&&!allAnswered?'Next unanswered':atEnd?'Review & submit':'Next'
 
   return <main className="focus-shell">
-    <header className="focus-topbar"><div><span className="eyebrow">Focused retest</span><h1>{title}</h1></div><div className="focus-progress"><b>{answeredCount}/{questions.length}</b><span>answered</span></div></header>
+    <header className="focus-topbar"><div><span className="eyebrow">Focused retest</span><h1>{title}</h1></div><div className="focus-progress"><b>{answeredCount} of {questions.length}</b><span>answered</span></div></header>
     <div className="focus-ruleline">{required?(minScore===0?'Completion unlocks the next full attempt':`${minScore}% required to unlock the next full attempt`):'Focused practice'}</div>
     <form action={action} className="focus-form">
       {questions.map(q=><input key={q.question_id} type="hidden" name={`q_${q.question_id}`} value={answers[q.question_id]??''}/>) }
-      <section className="focus-question" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-        <div className="focus-question-meta"><span>Question {current+1} of {questions.length}</span>{question.content_area&&<span>{question.content_area}</span>}</div>
-        <h2>{question.prompt}</h2>
-        {question.previous_answer&&<div className="focus-previous-answer"><span>Previous answer</span><b>{question.previous_answer}</b></div>}
-        {showHints&&question.focused_retake_hint&&<div className="focus-hint-wrap"><button type="button" className="focus-hint-button" onClick={()=>setOpenHint(openHint===question.question_id?null:question.question_id)}>{openHint===question.question_id?'Hide hint':'Show hint'}</button>{openHint===question.question_id&&<p className="focus-hint">{question.focused_retake_hint}</p>}</div>}
-        <div className="focus-answers">{question.choices.map((choice,i)=><label key={i} className={`focus-answer ${answers[question.question_id]===i?'selected':''}`}><input type="radio" checked={answers[question.question_id]===i} onChange={()=>choose(i)}/><span>{choice}</span></label>)}</div>
-      </section>
+      <div className="focus-stage" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+        <section className="focus-question">
+          <div className="focus-question-meta"><span>Question {current+1} of {questions.length}</span>{question.content_area&&<span>{question.content_area}</span>}</div>
+          <h2>{question.prompt}</h2>
+          {question.previous_answer&&<div className="focus-previous-answer"><span>Previous answer</span><b>{question.previous_answer}</b></div>}
+          {showHints&&question.focused_retake_hint&&<div className="focus-hint-wrap"><button type="button" className="focus-hint-button" onClick={()=>setOpenHint(openHint===question.question_id?null:question.question_id)}>{openHint===question.question_id?'Hide hint':'Show hint'}</button>{openHint===question.question_id&&<p className="focus-hint">{question.focused_retake_hint}</p>}</div>}
+          <div className="focus-answers">{question.choices.map((choice,i)=><label key={i} className={`focus-answer ${answers[question.question_id]===i?'selected':''}`}><input type="radio" checked={answers[question.question_id]===i} onChange={()=>choose(i)}/><span>{choice}</span></label>)}</div>
+        </section>
+        <div className="focus-swipe-space" aria-hidden="true"/>
+      </div>
       <div className="focus-dock">
         <div className="focus-number-strip" ref={stripRef}>{questions.map((q,i)=><button data-index={i} type="button" key={q.question_id} className={`${i===current?'current':''} ${answers[q.question_id]!==undefined?'answered':''}`} onClick={()=>setCurrent(i)}>{i+1}</button>)}</div>
         <div className="focus-nav"><button type="button" className="secondary" onClick={previous} disabled={current===0}>Previous</button>{atEnd&&allAnswered?<button type="submit">Submit focused retest</button>:<button type="button" onClick={next}>{nextLabel}</button>}</div>
