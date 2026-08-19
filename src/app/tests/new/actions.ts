@@ -13,9 +13,11 @@ export async function createTest(formData: FormData) {
   const examPreset = String(formData.get('exam_preset') ?? 'custom')
   const assessmentType = String(formData.get('assessment_type') ?? 'custom')
   const chapterLabel = String(formData.get('chapter_label') ?? '')
+  const questionsPerAttempt = Number(formData.get('questions_per_attempt') ?? 0)
+  const requireFocusedRetake = formData.get('require_focused_retake_before_full') === 'on'
   let questions: unknown
   try { questions = JSON.parse(String(formData.get('questions') ?? '[]')) } catch { redirect('/tests/new?error=Invalid+question+data') }
-  const { data, error } = await supabase.rpc('create_test_with_questions_v3', {
+  const { data, error } = await supabase.rpc('create_test_with_questions_v4', {
     p_title: title,
     p_description: description,
     p_randomize: randomize,
@@ -26,6 +28,8 @@ export async function createTest(formData: FormData) {
     p_assessment_type: assessmentType,
     p_chapter_label: chapterLabel,
     p_questions: questions,
+    p_questions_per_attempt: questionsPerAttempt > 0 ? questionsPerAttempt : null,
+    p_require_focused_retake_before_full: requireFocusedRetake,
   })
   if (error) redirect('/tests/new?error=' + encodeURIComponent(error.message))
   redirect(`/tests/${data}`)
