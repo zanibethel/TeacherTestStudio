@@ -3,7 +3,8 @@ import {redirect} from 'next/navigation'
 import {createClient} from '@/lib/supabase/server'
 import ReportsBrowser from './ReportsBrowser'
 
-export default async function ReportsIndex(){
+export default async function ReportsIndex({searchParams}:{searchParams:Promise<{q?:string;test?:string;assignment?:string;group?:string;student?:string}>}){
+ const initialFilters=await searchParams
  const supabase=await createClient()
  const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
  const{data:profile}=await supabase.from('profiles').select('role,teacher_approved').eq('id',user.id).single()
@@ -43,6 +44,6 @@ export default async function ReportsIndex(){
  const studentOptions:any[]=[];const seenStudents=new Set<string>();for(const r of roster??[]){const value=`roster:${(r as any).id}`;seenStudents.add(value);studentOptions.push({value,label:rosterLabel(r)})}for(const a of attempts??[]){if(!(a as any).student_id)continue;const rosterRow=rosterByStudentId.get((a as any).student_id);if(rosterRow)continue;const value=`student:${(a as any).student_id}`;if(seenStudents.has(value))continue;const student=Array.isArray((a as any).student)?(a as any).student[0]:(a as any).student;seenStudents.add(value);studentOptions.push({value,label:student?.full_name||'Student'})}studentOptions.sort((a,b)=>a.label.localeCompare(b.label))
  return <main>
   <div className="row between"><div><Link href="/dashboard">← My tests</Link><h1>Reports</h1><p className="muted">Assignment reports are listed from most recently shared to oldest. Search or filter by test, assignment, group, or student and the report list updates immediately.</p></div></div>
-  <ReportsBrowser reports={reports as any} tests={testOptions} groups={groupOptions} students={studentOptions}/>
+  <ReportsBrowser reports={reports as any} tests={testOptions} groups={groupOptions} students={studentOptions} initialFilters={initialFilters}/>
  </main>
 }
