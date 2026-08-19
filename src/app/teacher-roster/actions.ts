@@ -10,10 +10,12 @@ async function teacher(){
 }
 
 export async function addStudentEmail(fd:FormData){
-  const{supabase}=await teacher();const email=String(fd.get('email')||'').trim().toLowerCase();const firstName=String(fd.get('first_name')||'').trim();const lastName=String(fd.get('last_name')||'').trim()
-  const{error}=await supabase.rpc('add_teacher_student_email',{p_email:email,p_first_name:firstName||null,p_last_name:lastName||null})
+  const{supabase}=await teacher();const email=String(fd.get('email')||'').trim().toLowerCase();const firstName=String(fd.get('first_name')||'').trim();const lastName=String(fd.get('last_name')||'').trim();const className=String(fd.get('class_name')||'').trim()
+  const{data,error}=await supabase.rpc('add_teacher_student_to_roster',{p_email:email,p_first_name:firstName||null,p_last_name:lastName||null,p_class_name:className||null})
   if(error)redirect(`/teacher-roster?error=${encodeURIComponent(error.message)}`)
-  revalidatePath('/teacher-roster');redirect('/teacher-roster?message='+encodeURIComponent('Student added to your roster.'))
+  revalidatePath('/teacher-roster');revalidatePath('/teacher-groups')
+  const groupName=(data as any)?.group_name
+  redirect('/teacher-roster?message='+encodeURIComponent(groupName?`Student added to your roster and ${groupName}.`:'Student added to your roster.'))
 }
 
 export async function removeStudent(rosterId:string){
@@ -23,18 +25,19 @@ export async function removeStudent(rosterId:string){
 
 export async function createGroup(fd:FormData){
   const{supabase,user}=await teacher();const name=String(fd.get('name')||'').trim();if(!name)redirect('/teacher-roster?error='+encodeURIComponent('Enter a group name.'))
+  const{data:existing}=await supabase.from('teacher_groups').select('id,name').eq('teacher_id',user.id).ilike('name',name).maybeSingle();if(existing)redirect('/teacher-roster?error='+encodeURIComponent(`A class named ${existing.name} already exists.`))
   const{data:group,error}=await supabase.from('teacher_groups').insert({teacher_id:user.id,name}).select('id').single();if(error)redirect('/teacher-roster?error='+encodeURIComponent(error.message))
   const rosterIds=fd.getAll('roster_ids').map(String);if(rosterIds.length){const{data:owned}=await supabase.from('teacher_student_roster').select('id').eq('teacher_id',user.id).in('id',rosterIds);const ids=(owned??[]).map((r:any)=>r.id);if(ids.length){const{error:memberError}=await supabase.from('teacher_group_members').insert(ids.map(roster_id=>({group_id:group.id,roster_id})));if(memberError)redirect('/teacher-roster?error='+encodeURIComponent(memberError.message))}}
-  revalidatePath('/teacher-roster');redirect('/teacher-roster?message='+encodeURIComponent('Group created.'))
+  revalidatePath('/teacher-roster');revalidatePath('/teacher-groups');redirect('/teacher-roster?message='+encodeURIComponent('Class created.'))
 }
 
 export async function saveGroupMembers(groupId:string,fd:FormData){
-  const{supabase,user}=await teacher();const{data:group}=await supabase.from('teacher_groups').select('id').eq('id',groupId).eq('teacher_id',user.id).single();if(!group)redirect('/teacher-roster?error='+encodeURIComponent('Group not found.'))
+  const{supabase,user}=await teacher();const{data:group}=await supabase.from('teacher_groups').select('id').eq('id',groupId).eq('teacher_id',user.id).single();if(!group)redirect('/teacher-roster?error='+encodeURIComponent('Class not found.'))
   const{error:delError}=await supabase.from('teacher_group_members').delete().eq('group_id',groupId);if(delError)redirect('/teacher-roster?error='+encodeURIComponent(delError.message))
   const rosterIds=fd.getAll('roster_ids').map(String);if(rosterIds.length){const{data:owned}=await supabase.from('teacher_student_roster').select('id').eq('teacher_id',user.id).in('id',rosterIds);const ids=(owned??[]).map((r:any)=>r.id);if(ids.length){const{error}=await supabase.from('teacher_group_members').insert(ids.map(roster_id=>({group_id:groupId,roster_id})));if(error)redirect('/teacher-roster?error='+encodeURIComponent(error.message))}}
-  revalidatePath('/teacher-roster')
+  revalidatePath('/teacher-roster');revalidatePath('/teacher-groups')
 }
 
 export async function deleteGroup(groupId:string){
-  const{supabase,user}=await teacher();const{error}=await supabase.from('teacher_groups').delete().eq('id',groupId).eq('teacher_id',user.id);if(error)redirect('/teacher-roster?error='+encodeURIComponent(error.message));revalidatePath('/teacher-roster')
+  const{supabase,user}=await teacher();const{error}=await supabase.from('teacher_groups').delete().eq('id',groupId).eq('teacher_id',user.id);if(error)redirect('/teacher-roster?error='+encodeURIComponent(error.message));revalidatePath('/teacher-roster');revalidatePath('/teacher-groups')
 }
