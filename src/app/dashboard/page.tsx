@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { copyTest } from './actions'
+import StudentAssignments from './StudentAssignments'
 
 export default async function Dashboard({searchParams}:{searchParams:Promise<{error?:string}>}){
   const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
@@ -22,17 +23,16 @@ export default async function Dashboard({searchParams}:{searchParams:Promise<{er
     </main>
   }
 
-  const[{data:attempts},{data:assignments}]=await Promise.all([
-    supabase.from('attempts').select('id,test_id,share_id,score_percent,submitted_at,started_at,attempt_number,tests(title,allow_save_resume),test_shares(token)').order('started_at',{ascending:false}),
-    supabase.rpc('get_my_student_assignments')
+  const[{data:attempts},{data:assignments},{data:practiceSessions}]=await Promise.all([
+    supabase.from('attempts').select('id,test_id,share_id,score_percent,submitted_at,started_at,attempt_number,tests(title),test_shares(token)').order('started_at',{ascending:false}),
+    supabase.rpc('get_my_student_assignments'),
+    supabase.from('practice_sessions').select('id,status,score_percent,source_attempt_id,source_share_id,created_at').eq('student_id',user.id).order('created_at',{ascending:false})
   ])
-  const inProgress=(attempts??[]).filter((a:any)=>!a.submitted_at);const completed=(attempts??[]).filter((a:any)=>a.submitted_at)
-  const assignmentItems=(assignments??[]) as any[]
+  const completed=(attempts??[]).filter((a:any)=>a.submitted_at)
   return <main><div className="row between"><div><h1>Student dashboard</h1><p className="muted">Welcome, {profile?.full_name||user.email}</p></div><form action="/auth/signout" method="post"><button className="ghost">Sign out</button></form></div>{query.error&&<p className="bad">{query.error}</p>}
-    {inProgress.length>0&&<><h2>Continue where you left off</h2>{inProgress.map((a:any)=>{const share=Array.isArray(a.test_shares)?a.test_shares[0]:a.test_shares;const href=a.share_id&&share?.token?`/share/${share.token}`:`/take/${a.test_id}`;return <Link className="card card-link result-row" key={a.id} href={href}><div><b>{Array.isArray(a.tests)?a.tests[0]?.title:a.tests?.title}</b><p className="muted">Attempt {a.attempt_number} · In progress</p></div><strong>Continue →</strong></Link>})}</>}
-    <div className="row between" style={{alignItems:'end',marginTop:20}}><div><h2 style={{marginBottom:4}}>My assignments</h2><p className="muted" style={{marginTop:0}}>Tests assigned directly to you or through one of your groups appear here automatically.</p></div></div>
-    {!assignmentItems.length?<div className="card"><p className="muted">No active assignments yet.</p></div>:assignmentItems.map((a:any)=><Link className="card card-link" key={a.assignment_key} href={a.href}><div className="row between"><div><b>{a.assignment_label||a.title}</b>{a.assignment_label&&<p className="muted" style={{margin:'3px 0 0'}}>{a.title}</p>}</div><span className="pill">{a.access_label}</span></div><p className="muted" style={{marginBottom:4}}>{a.teacher_name}{(a.teacher_organization||a.teacher_title)?` · ${[a.teacher_organization,a.teacher_title].filter(Boolean).join(' ')}`:''}</p><p className="muted" style={{marginTop:0}}>Assigned {new Date(a.assigned_at).toLocaleString()}{a.due_at?` · Due ${new Date(a.due_at).toLocaleString()}`:' · No due date'}{a.experience_name?` · ${a.experience_name}`:''}</p></Link>)}
+    <div style={{marginTop:20}}><h2 style={{marginBottom:4}}>My assignments</h2><p className="muted" style={{marginTop:0}}>Your next step updates automatically as you test, remediate weak areas, and retest.</p></div>
+    <StudentAssignments assignments={(assignments??[]) as any[]} attempts={(attempts??[]) as any[]} practiceSessions={(practiceSessions??[]) as any[]}/>
     <form action="/take/go" method="get" className="card"><h2>Open with a test code</h2><label>Teacher&apos;s test code</label><input name="code" required autoCapitalize="characters" placeholder="AB12CD34"/><button>Open test</button><div className="row" style={{marginTop:'1rem',flexWrap:'wrap'}}><Link className="secondary button" href="/practice-library">Browse practice passes</Link><Link className="secondary button" href="/find-teacher">Find my teacher</Link></div><p className="muted">Assigned work appears above automatically. Use Find my teacher only when you need to connect with a teacher who has not assigned anything to you yet.</p></form>
-    <h2>Completed attempts</h2>{!completed.length?<div className="card"><p className="muted">You have not submitted a test yet.</p></div>:completed.map((a:any)=><Link className="card card-link result-row" key={a.id} href={`/attempts/${a.id}`}><div><b>{Array.isArray(a.tests)?a.tests[0]?.title:a.tests?.title}</b><p className="muted">Attempt {a.attempt_number} · {new Date(a.submitted_at).toLocaleString()}</p></div><strong>{a.score_percent}%</strong></Link>)}
+    {completed.length>0&&<details className="card"><summary style={{cursor:'pointer',fontWeight:800}}>Attempt history · {completed.length}</summary><div style={{marginTop:12}}>{completed.map((a:any)=><Link className="card card-link result-row" key={a.id} href={`/attempts/${a.id}`}><div><b>{Array.isArray(a.tests)?a.tests[0]?.title:a.tests?.title}</b><p className="muted">Attempt {a.attempt_number} · {new Date(a.submitted_at).toLocaleString()}</p></div><strong>{a.score_percent}%</strong></Link>)}</div></details>}
   </main>
 }
