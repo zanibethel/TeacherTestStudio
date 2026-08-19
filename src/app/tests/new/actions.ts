@@ -14,14 +14,6 @@ export async function createTest(formData: FormData) {
   const assessmentType = String(formData.get('assessment_type') ?? 'custom')
   const chapterLabel = String(formData.get('chapter_label') ?? '')
   const questionsPerAttempt = Number(formData.get('questions_per_attempt') ?? 0)
-  const requireFocusedRetake = formData.get('require_focused_retake_before_full') === 'on'
-  const focusedRetakePercent = Number(formData.get('focused_retake_percent') ?? 50)
-  const focusedRetakeMinScore = Number(formData.get('focused_retake_min_score') ?? 0)
-  const focusedRetakeHints = formData.get('focused_retake_hints') === 'on'
-  const unlimitedAttemptsUntilDue = formData.get('unlimited_attempts_until_due') === 'on'
-  const maxAttempts = Number(formData.get('max_attempts') ?? 1)
-  const dueAtRaw = String(formData.get('due_at') ?? '').trim()
-  const dueAt = dueAtRaw || null
   let questions: unknown
   try { questions = JSON.parse(String(formData.get('questions') ?? '[]')) } catch { redirect('/tests/new?error=Invalid+question+data') }
   const { data, error } = await supabase.rpc('create_test_with_questions_v6', {
@@ -36,13 +28,13 @@ export async function createTest(formData: FormData) {
     p_chapter_label: chapterLabel,
     p_questions: questions,
     p_questions_per_attempt: questionsPerAttempt > 0 ? questionsPerAttempt : null,
-    p_require_focused_retake_before_full: requireFocusedRetake,
-    p_focused_retake_percent: focusedRetakePercent,
-    p_focused_retake_min_score: focusedRetakeMinScore,
-    p_focused_retake_hints: focusedRetakeHints,
-    p_unlimited_attempts_until_due: unlimitedAttemptsUntilDue,
-    p_max_attempts: maxAttempts,
-    p_due_at: dueAt,
+    p_require_focused_retake_before_full: false,
+    p_focused_retake_percent: 50,
+    p_focused_retake_min_score: 0,
+    p_focused_retake_hints: true,
+    p_unlimited_attempts_until_due: false,
+    p_max_attempts: 1,
+    p_due_at: null,
   })
   if (error) redirect('/tests/new?error=' + encodeURIComponent(error.message))
   redirect(`/tests/${data}`)
