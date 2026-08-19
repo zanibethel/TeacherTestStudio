@@ -10,19 +10,36 @@ export default async function Dashboard({searchParams}:{searchParams:Promise<{er
   if(profile?.role==='teacher'){
     if(!profile.teacher_approved)return <main className="narrow"><div className="row between"><h1>Teacher access pending</h1><form action="/auth/signout" method="post"><button className="ghost">Sign out</button></form></div><section className="card"><p>This account does not have approved teacher access.</p><p className="muted">Teacher tools are invite-only. Ask the approved teacher who invited you to send a valid one-time invitation link.</p></section></main>
     const now=Date.now();const soon=now+48*60*60*1000
-    const[{data:tests},{count:bankCount},{count:pendingConnections},{data:activeShares}]=await Promise.all([
+    const[{data:tests},{count:bankCount},{count:pendingConnections},{count:connectedStudents},{count:groupCount},{data:activeShares}]=await Promise.all([
       supabase.from('tests').select('id,title,status,share_code,created_at,updated_at,randomize_questions,assessment_type,attempts(count)').order('updated_at',{ascending:false}),
       supabase.from('question_bank').select('*',{count:'exact',head:true}),
       supabase.from('student_teacher_connection_requests').select('*',{count:'exact',head:true}).eq('teacher_id',user.id).eq('status','pending'),
+      supabase.from('teacher_student_roster').select('*',{count:'exact',head:true}).eq('teacher_id',user.id).not('student_id','is',null),
+      supabase.from('teacher_groups').select('*',{count:'exact',head:true}).eq('teacher_id',user.id),
       supabase.from('test_shares').select('id,label,due_at,created_at,test:tests(title)').eq('teacher_id',user.id).eq('active',true).order('created_at',{ascending:false})
     ])
     const classroomShares=(activeShares??[]).filter((s:any)=>s.due_at||s.label)
     const dueSoon=classroomShares.filter((s:any)=>{if(!s.due_at)return false;const due=new Date(s.due_at).getTime();return due>now&&due<=soon})
     const pastDue=classroomShares.filter((s:any)=>s.due_at&&new Date(s.due_at).getTime()<=now)
     const attentionCount=(pendingConnections??0)+dueSoon.length+pastDue.length
+    const totalAttempts=(tests??[]).reduce((sum:number,t:any)=>sum+Number(t.attempts?.[0]?.count??0),0)
+    const gettingStarted=[
+      {done:(connectedStudents??0)>0,label:'Add or approve a student',detail:(connectedStudents??0)>0?`${connectedStudents} connected`:'Build your classroom roster',href:'/teacher-roster'},
+      {done:(groupCount??0)>0,label:'Create a class',detail:(groupCount??0)>0?`${groupCount} class${groupCount===1?'':'es'} ready`:'Organize students into a class',href:'/teacher-groups'},
+      {done:(bankCount??0)>0||(tests??[]).length>0,label:'Add teaching content',detail:(bankCount??0)>0?`${bankCount} questions in your bank`:(tests??[]).length>0?`${tests?.length} test${tests?.length===1?'':'s'} created`:'Import shared questions or create a test',href:(bankCount??0)>0?'/tests/new':'/shared-library'},
+      {done:classroomShares.length>0,label:'Assign a test',detail:classroomShares.length>0?`${classroomShares.length} active assignment${classroomShares.length===1?'':'s'}`:'Share a test with a class or student',href:(tests??[]).length?`/tests/${tests![0].id}`:'/tests/new'},
+      {done:totalAttempts>0,label:'Review student progress',detail:totalAttempts>0?`${totalAttempts} attempt${totalAttempts===1?'':'s'} recorded`:'Progress appears after a student starts testing',href:'/teacher-progress'},
+    ]
+    const setupComplete=gettingStarted.every(step=>step.done)
+    const setupDone=gettingStarted.filter(step=>step.done).length
     return <main>
       <div className="dashboard-heading"><div><span className="eyebrow">TEACHER WORKSPACE</span><h1>Teacher dashboard</h1><p className="muted">Welcome, {profile.full_name||user.email}</p></div><form action="/auth/signout" method="post"><button className="ghost">Sign out</button></form></div>
       {query.error&&<p className="bad notice">{query.error}</p>}
+
+      {!setupComplete&&<section className="card" style={{padding:18}}>
+        <div className="row between" style={{alignItems:'flex-start'}}><div><span className="eyebrow">GETTING STARTED</span><h2 style={{margin:'5px 0 3px'}}>Set up your classroom</h2><p className="muted" style={{margin:0}}>CramLoop checks these off automatically as you work.</p></div><span className="pill">{setupDone}/5 complete</span></div>
+        <div style={{display:'grid',gap:8,marginTop:14}}>{gettingStarted.map((step,index)=><Link key={step.label} href={step.href} style={{display:'grid',gridTemplateColumns:'30px minmax(0,1fr) auto',alignItems:'center',gap:10,padding:'10px 12px',border:'1px solid #e4e7ef',borderRadius:12,background:step.done?'#f0fdf4':'#fff',color:'#172033'}}><span aria-hidden style={{width:26,height:26,borderRadius:999,display:'grid',placeItems:'center',fontWeight:850,background:step.done?'#dcfce7':'#eef2ff',color:step.done?'#047857':'#4338ca'}}>{step.done?'✓':index+1}</span><span style={{minWidth:0}}><b style={{display:'block'}}>{step.label}</b><small className="muted">{step.detail}</small></span><span aria-hidden style={{color:'#4338ca',fontWeight:800}}>→</span></Link>)}</div>
+      </section>}
 
       <section className="card" style={{padding:18}}>
         <div className="row between" style={{alignItems:'flex-start'}}><div><span className="eyebrow">WHAT NEEDS ME</span><h2 style={{margin:'5px 0 3px'}}>Classroom attention</h2><p className="muted" style={{margin:0}}>Start with the items most likely to need action today.</p></div><span className="pill" style={{background:attentionCount?'#fff7ed':'#ecfdf5',color:attentionCount?'#c2410c':'#047857'}}>{attentionCount?`${attentionCount} item${attentionCount===1?'':'s'}`:'All clear'}</span></div>
