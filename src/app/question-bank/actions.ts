@@ -12,6 +12,14 @@ export async function deleteBankQuestion(id:string){
   revalidatePath('/question-bank');revalidatePath('/tests/new')
 }
 
+export async function refreshSharedBankQuestions(){
+  const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
+  const{data,error}=await supabase.rpc('refresh_my_shared_bank_questions')
+  if(error)redirect('/question-bank?error='+encodeURIComponent(error.message))
+  revalidatePath('/question-bank');revalidatePath('/tests/new')
+  redirect('/question-bank?refreshed='+encodeURIComponent(String(data??0)))
+}
+
 export async function updateBankQuestion(id:string,fd:FormData){
   const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
   const prompt=String(fd.get('prompt')||'').trim();const contentArea=String(fd.get('content_area')||'').trim();const explanation=String(fd.get('explanation')||'').trim();const focusedHint=String(fd.get('focused_retake_hint')||'').trim()
