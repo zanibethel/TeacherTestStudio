@@ -7,9 +7,10 @@ import { logIntegrity, saveProgress, submitTest } from '@/app/take/[id]/actions'
 function shuffled<T>(items:T[]){return [...items].sort(()=>Math.random()-0.5)}
 
 export default async function SharedTest({params,searchParams}:{params:Promise<{token:string}>,searchParams:Promise<{error?:string;fresh?:string}>}){
-  const{token}=await params;const query=await searchParams;const supabase=await createClient()
-  const{data:{user}}=await supabase.auth.getUser();if(!user)redirect(`/login?message=${encodeURIComponent('Sign in as a student to open this shared test.')}`)
-  const{data:profile}=await supabase.from('profiles').select('role').eq('id',user.id).single();if(profile?.role!=='student')redirect('/dashboard')
+  const{token}=await params;const query=await searchParams;const supabase=await createClient();const returnPath=`/share/${encodeURIComponent(token)}`
+  const{data:{user}}=await supabase.auth.getUser();if(!user)redirect(`/login?message=${encodeURIComponent('Sign in as a student to open this shared test.')}&next=${encodeURIComponent(returnPath)}`)
+  const{data:profile}=await supabase.from('profiles').select('role').eq('id',user.id).single()
+  if(profile?.role!=='student')return <main className="narrow"><Link href="/dashboard">← Dashboard</Link><h1>Student share link</h1><section className="card"><h2>This assignment link is for students</h2><p className="muted">You’re currently signed in with a teacher account, so CramLoop won’t create a student attempt under this account.</p><p>To test the real student flow, open this link in a private/incognito window or sign out and sign in with a student account.</p><div className="row"><Link className="button" href="/auth/signout">Sign out</Link><Link className="button secondary" href="/dashboard">Teacher dashboard</Link></div></section></main>
   const{data:share,error:resolveError}=await supabase.rpc('resolve_test_share',{p_token:token})
   if(resolveError)return <main className="narrow"><h1>Share unavailable</h1><p className="bad">{resolveError.message}</p><Link className="button" href="/dashboard">Back to dashboard</Link></main>
   if(!share?.test_id)notFound()
