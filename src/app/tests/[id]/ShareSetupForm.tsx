@@ -2,6 +2,7 @@
 
 import {useMemo,useState} from 'react'
 import AudiencePicker from './AudiencePicker'
+import styles from './ShareSetupForm.module.css'
 
 type RosterRow={id:string;student_email:string;student_id:string|null}
 type GroupRow={id:string;name:string;member_count:number}
@@ -70,42 +71,42 @@ export default function ShareSetupForm({roster,groups,presets,proActive,fullQues
   }
   const focusedCount=Math.max(1,Math.ceil(fullQuestionCount*(settings.focusedPercent/100)))
 
-  return <>
+  return <div className={styles.form}>
     <AudiencePicker roster={roster} groups={groups}/>
 
-    <section className="notice">
+    <section className={`${styles.section} ${styles.stepSection}`}>
       <span className="eyebrow">STEP 2</span>
-      <h3 style={{margin:'4px 0'}}>Assignment details</h3>
-      <div className="settings-grid">
+      <h3>Assignment details</h3>
+      <div className={styles.twoCol}>
         <div><label>Assignment label <span className="muted">(optional)</span></label><input name="label" placeholder="Period 2 final, Week 1 exam, makeup assignment"/></div>
-        <div><label>Due date & time <span className="muted">(optional)</span></label><input name="due_at" type="datetime-local"/><p className="muted">Required only if you choose unlimited attempts until the deadline.</p></div>
+        <div><label>Due date & time <span className="muted">(optional)</span></label><input name="due_at" type="datetime-local"/><p className={styles.help}>Only required with unlimited attempts.</p></div>
       </div>
     </section>
 
-    <section className="notice">
+    <section className={`${styles.section} ${styles.stepSection}`}>
       <span className="eyebrow">STEP 3</span>
-      <h3 style={{margin:'4px 0'}}>Testing experience</h3>
+      <h3>Testing experience</h3>
       <label>Experience preset</label>
       <select value={selectedKey} onChange={e=>choosePreset(e.target.value)}>
         {options.map(o=><option key={o.key} value={o.key}>{o.saved?`${o.name} · My preset`:o.name}</option>)}
         {selectedKey==='custom'&&<option value="custom">Custom</option>}
       </select>
       <input type="hidden" name="experience_name" value={experienceName}/>
-      <p className="muted">Pick the closest classroom setup first. Changing a rule below turns it into a custom experience without changing the audience or deadline.</p>
+      <p className={styles.help}>Choose the closest setup. Changing a rule below makes it Custom.</p>
     </section>
 
-    {selectedKey==='custom'&&<section className="notice"><div className="row between"><div><b>Custom experience</b><p className="muted">Use these settings once, or save them as your own reusable testing experience.</p></div></div><label className="check"><input type="checkbox" checked={savePreset} onChange={e=>setSavePreset(e.target.checked)}/><span><b>Save this experience for later</b></span></label>{savePreset&&<><label>Preset name</label><input name="save_preset_name" value={presetName} onChange={e=>setPresetName(e.target.value)} maxLength={80} placeholder="My weekly remediation setup" required/></>}</section>}
+    {selectedKey==='custom'&&<section className={styles.section}><div><b>Custom experience</b><p className={styles.help}>Use it once or save it as a reusable preset.</p></div><label className={styles.optionRow}><input type="checkbox" checked={savePreset} onChange={e=>setSavePreset(e.target.checked)}/><span><b>Save this experience for later</b></span></label>{savePreset&&<><label>Preset name</label><input name="save_preset_name" value={presetName} onChange={e=>setPresetName(e.target.value)} maxLength={80} placeholder="My weekly remediation setup" required/></>}</section>}
 
-    <section className="notice"><h3>Test environment</h3><select name="delivery_mode" value={settings.deliveryMode} onChange={e=>change('deliveryMode',e.target.value as Settings['deliveryMode'])}><option value="standard">Standard test</option><option value="restricted">Restricted Test Mode + integrity monitoring</option></select></section>
+    <section className={styles.section}><h3>Test environment</h3><select name="delivery_mode" value={settings.deliveryMode} onChange={e=>change('deliveryMode',e.target.value as Settings['deliveryMode'])}><option value="standard">Standard test</option><option value="restricted">Restricted Test Mode + integrity monitoring</option></select></section>
 
-    <section className="notice"><h3>Full attempts</h3><div className="settings-grid"><div><label>Full test attempts</label><input name="max_attempts" type="number" min="1" max="100" value={settings.maxAttempts} disabled={settings.unlimited||settings.paidAccess} onChange={e=>change('maxAttempts',Number(e.target.value)||1)}/><p className="muted">2 means the original attempt plus 1 additional full attempt.</p></div></div><label className="check"><input type="checkbox" name="unlimited_attempts_until_due" checked={settings.unlimited} disabled={settings.paidAccess} onChange={e=>change('unlimited',e.target.checked)}/><span><b>Unlimited full attempts until due date</b></span></label><p className="muted">When another full attempt is allowed, CramLoop automatically builds a fresh retest from the approved test pool where possible.</p></section>
+    <section className={styles.section}><h3>Full attempts</h3><div className={styles.compactField}><label>Full test attempts</label><input name="max_attempts" type="number" min="1" max="100" value={settings.maxAttempts} disabled={settings.unlimited||settings.paidAccess} onChange={e=>change('maxAttempts',Number(e.target.value)||1)}/><p className={styles.help}>2 = original attempt + 1 additional full attempt.</p></div><label className={styles.optionRow}><input type="checkbox" name="unlimited_attempts_until_due" checked={settings.unlimited} disabled={settings.paidAccess} onChange={e=>change('unlimited',e.target.checked)}/><span><b>Unlimited full attempts until due date</b></span></label><p className={styles.help}>When another full attempt is allowed, CramLoop builds a fresh retest from the approved pool where possible.</p></section>
 
-    <section className="notice"><h3>After a failed full attempt</h3><label className="check"><input type="checkbox" name="require_focused_retake_before_full" checked={settings.requireFocused} onChange={e=>change('requireFocused',e.target.checked)}/><span><b>Require a focused retest before another full attempt</b></span></label><div className="settings-grid"><div><label>Focused retest size</label><select name="focused_retake_percent" value={settings.focusedPercent} onChange={e=>change('focusedPercent',Number(e.target.value))}>{[10,20,30,40,50,60,70,80,90,100].map(n=><option key={n} value={n}>{n}% of full test</option>)}</select><p className="muted">For this test, {settings.focusedPercent}% is about {focusedCount} focused question{focusedCount===1?'':'s'}.</p></div><div><label>Grade required to proceed</label><select name="focused_retake_min_score" value={settings.focusedMinScore} onChange={e=>change('focusedMinScore',Number(e.target.value))}>{Array.from({length:101},(_,n)=><option key={n} value={n}>{n}%{n===0?' · completion only':''}</option>)}</select><p className="muted">0% means completion alone unlocks the next full attempt.</p></div></div><label className="check"><input type="checkbox" name="focused_retake_hints" checked={settings.focusedHints} onChange={e=>change('focusedHints',e.target.checked)}/><span><b>Show per-question teaching hints on focused retests</b> — never on the full test. <a href="/help#focused-hints">Learn more</a></span></label></section>
+    <section className={styles.section}><h3>After a failed full attempt</h3><label className={styles.optionRow}><input type="checkbox" name="require_focused_retake_before_full" checked={settings.requireFocused} onChange={e=>change('requireFocused',e.target.checked)}/><span><b>Require a focused retest before another full attempt</b></span></label><div className={styles.twoCol}><div><label>Focused retest size</label><select name="focused_retake_percent" value={settings.focusedPercent} onChange={e=>change('focusedPercent',Number(e.target.value))}>{[10,20,30,40,50,60,70,80,90,100].map(n=><option key={n} value={n}>{n}% of full test</option>)}</select><p className={styles.help}>About {focusedCount} focused question{focusedCount===1?'':'s'}.</p></div><div><label>Grade required to proceed</label><select name="focused_retake_min_score" value={settings.focusedMinScore} onChange={e=>change('focusedMinScore',Number(e.target.value))}>{Array.from({length:101},(_,n)=><option key={n} value={n}>{n}%{n===0?' · completion only':''}</option>)}</select><p className={styles.help}>{settings.focusedMinScore===0?'Completion alone unlocks the next full attempt.':`${settings.focusedMinScore}% is required to unlock the next full attempt.`}</p></div></div><label className={styles.optionRow}><input type="checkbox" name="focused_retake_hints" checked={settings.focusedHints} onChange={e=>change('focusedHints',e.target.checked)}/><span><b>Show teaching hints on focused retests</b><small>Never shown on the full test. <a href="/help#focused-hints">Learn more</a></small></span></label></section>
 
-    <section className="notice"><h3>After-test learning <span className="muted">(optional)</span></h3><label className="check"><input type="checkbox" name="study_guide_enabled" checked={settings.studyGuide} onChange={e=>change('studyGuide',e.target.checked)}/><b>Study guide</b> — show subjects and concepts that need improvement</label><label className="check"><input type="checkbox" name="focused_retake_enabled" checked={settings.focusedRetake} onChange={e=>change('focusedRetake',e.target.checked)}/><b>Allow optional weak-area practice</b> — available even when a focused retest is not required</label></section>
+    <section className={`${styles.section} ${styles.learningSection}`}><h3>After-test learning <span className="muted">(optional)</span></h3><label className={styles.optionRow}><input type="checkbox" name="study_guide_enabled" checked={settings.studyGuide} onChange={e=>change('studyGuide',e.target.checked)}/><span><b>Study guide</b><small>Show the subjects and concepts that need improvement.</small></span></label><label className={styles.optionRow}><input type="checkbox" name="focused_retake_enabled" checked={settings.focusedRetake} onChange={e=>change('focusedRetake',e.target.checked)}/><span><b>Optional weak-area practice</b><small>Let students practice weak areas even when remediation is not required.</small></span></label></section>
 
-    <details className="card"><summary><b>Advanced assignment settings</b></summary><label>Share-link expiration <span className="muted">(optional)</span></label><input name="link_expires_at" type="datetime-local"/><p className="muted">Usually the assignment due date is enough. Use this only when the link itself should stop opening at a different time.</p></details>
+    <details className={`${styles.details} card`}><summary><b>Advanced assignment settings</b></summary><div className={styles.detailsBody}><label>Share-link expiration <span className="muted">(optional)</span></label><input name="link_expires_at" type="datetime-local"/><p className={styles.help}>Usually the due date is enough. Use this only when the link itself should expire separately.</p></div></details>
 
-    <details className="card" open={settings.paidAccess}><summary><b>Paid practice access settings</b></summary><label className="check"><input type="checkbox" name="paid_access" checked={settings.paidAccess} onChange={e=>change('paidAccess',e.target.checked)}/><span><b>Charge students for this practice access</b> — Pro only</span></label><div className="settings-grid"><div><label>Access length</label><input name="access_duration_days" type="number" min="1" max="365" value={settings.accessDuration} onChange={e=>change('accessDuration',Number(e.target.value)||14)}/></div><div><label>Price</label><input name="price_dollars" type="number" min="1" step="0.01" value={settings.price} onChange={e=>change('price',e.target.value)} placeholder="12.99"/></div></div><p className="muted">{proActive?'Your account can create paid access. Checkout is not connected yet.':'Teacher Pro is required only when charging students.'}</p></details>
-  </>
+    <details className={`${styles.details} card`} open={settings.paidAccess}><summary><b>Paid practice access settings</b></summary><div className={styles.detailsBody}><label className={styles.optionRow}><input type="checkbox" name="paid_access" checked={settings.paidAccess} onChange={e=>change('paidAccess',e.target.checked)}/><span><b>Charge students for this practice access</b><small>Pro only</small></span></label><div className={styles.twoCol}><div><label>Access length</label><input name="access_duration_days" type="number" min="1" max="365" value={settings.accessDuration} onChange={e=>change('accessDuration',Number(e.target.value)||14)}/></div><div><label>Price</label><input name="price_dollars" type="number" min="1" step="0.01" value={settings.price} onChange={e=>change('price',e.target.value)} placeholder="12.99"/></div></div><p className={styles.help}>{proActive?'Your account can create paid access. Checkout is not connected yet.':'Teacher Pro is required only when charging students.'}</p></div></details>
+  </div>
 }
