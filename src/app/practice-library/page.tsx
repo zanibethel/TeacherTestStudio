@@ -62,9 +62,11 @@ export default async function PracticeLibrary({searchParams}:{searchParams:Promi
         const active=['paid','comped'].includes(b.entitlement_status??'')&&(!b.entitlement_expires_at||new Date(b.entitlement_expires_at).getTime()>Date.now())
         const previews=previewsByBundle.get(String(b.bundle_id))??[]
         const currentLabel=monthYear(b.current_as_of)
+        const reviewCount=Number(b.review_count||0)
         return <section className="card bundle-card" key={b.bundle_id}>
           <div className="row between"><div><h3>{b.title}</h3><p className="muted">{b.category||'Other'} · {b.subject} · {b.resource_count} included resource{b.resource_count===1?'':'s'}</p></div><span className="pill">{active?'Access active':b.verified?'CramLoop Verified':'Cram & prep'}</span></div>
           {b.verified&&<div className="question-summary"><b>✓ CramLoop Verified</b><p className="muted">Content version {b.content_version||'1.0'}{currentLabel?` · Current as of ${currentLabel}`:''}</p>{b.alignment_note&&<p className="muted">{b.alignment_note}</p>}</div>}
+          {reviewCount>0&&<p><b>★ {Number(b.average_rating).toFixed(1)} / 5</b> <span className="muted">· {reviewCount} completed-practice review{reviewCount===1?'':'s'}</span></p>}
           <p>{b.description}</p>
           <p><b>24-hour, 3-day, 7-day, or 14-day access</b></p>
           {active&&b.entitlement_expires_at&&<p className="good">Active through {new Date(b.entitlement_expires_at).toLocaleString()}</p>}
