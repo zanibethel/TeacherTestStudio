@@ -2,21 +2,76 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
-export default async function PracticeLibrary(){
-  const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
+export default async function PracticeLibrary({searchParams}:{searchParams:Promise<{q?:string;category?:string}>}){
+  const query=await searchParams
+  const q=String(query.q??'').trim().toLowerCase()
+  const category=String(query.category??'').trim()
+  const supabase=await createClient()
+  const{data:{user}}=await supabase.auth.getUser()
+  if(!user)redirect('/login')
   const{data:profile}=await supabase.from('profiles').select('role').eq('id',user.id).single()
   const{data:bundles}=await supabase.rpc('get_practice_bundle_catalog')
-  const{data:freeResources}=await supabase.from('shared_collections').select('id,title,description,subject,collection_type,access_type,price_cents,catalog_scope').eq('active',true).eq('student_available',true).eq('catalog_scope','platform').eq('access_type','free').order('subject').order('title')
+  const bundleRows=bundles??[]
+  const bundleIds=bundleRows.map((b:any)=>b.bundle_id)
+  const{data:previewLinks}=bundleIds.length
+    ?await supabase.from('practice_bundle_collections').select('bundle_id,collection_id,position').in('bundle_id',bundleIds).eq('is_free_preview',true).order('position')
+    :{data:[] as any[]}
+  const previewIds=(previewLinks??[]).map((p:any)=>p.collection_id)
+  const{data:previewResources}=previewIds.length
+    ?await supabase.from('shared_collections').select('id,title,description,subject,collection_type').in('id',previewIds).eq('active',true)
+    :{data:[] as any[]}
+  const previewById=new Map((previewResources??[]).map((r:any)=>[r.id,r]))
+  const previewsByBundle=new Map<string,any[]>()
+  for(const link of previewLinks??[]){
+    const resource=previewById.get(link.collection_id)
+    if(!resource)continue
+    const current=previewsByBundle.get(link.bundle_id)??[]
+    current.push({...resource,position:link.position})
+    previewsByBundle.set(link.bundle_id,current)
+  }
+  const categories=Array.from(new Set(bundleRows.map((b:any)=>String(b.subject)).filter(Boolean))).sort()
+  const filtered=bundleRows.filter((b:any)=>{
+    const matchesCategory=!category||b.subject===category
+    const haystack=`${b.title} ${b.subject} ${b.description??''}`.toLowerCase()
+    return matchesCategory&&(!q||haystack.includes(q))
+  })
+
   return <main>
-    <Link href="/dashboard">← Dashboard</Link><h1>Practice library</h1>
-    <p className="muted">Browse platform-created exam-prep bundles and free practice resources. Need help right before a test? Bundle pages now include short-term cram access starting at 24 hours, along with longer prep windows.</p>
+    <Link href="/dashboard">← Dashboard</Link>
+    <h1>Practice library</h1>
+    <p className="muted">Find a subject, try its free previews, then choose a short cram session or a longer prep window when you want the full bundle.</p>
 
-    <h2>Practice bundles</h2>
-    {!(bundles??[]).length?<section className="card"><p className="muted">No practice bundles are available yet.</p></section>:(bundles??[]).map((b:any)=>{const active=['paid','comped'].includes(b.entitlement_status??'')&&(!b.entitlement_expires_at||new Date(b.entitlement_expires_at).getTime()>Date.now());return <Link className="card card-link" href={`/practice-library/bundles/${b.bundle_id}`} key={b.bundle_id}><div className="row between"><div><h3>{b.title}</h3><p className="muted">{b.subject} · {b.resource_count} included resource{b.resource_count===1?'':'s'}</p></div><span className="pill">{active?'Access active':'24-hour cram available'}</span></div><p>{b.description}</p><p><b>Choose 24-hour, 3-day, 7-day, or 14-day access</b>{b.free_preview_enabled?' · free previews included':''}</p>{active&&b.entitlement_expires_at&&<p className="good">Active through {new Date(b.entitlement_expires_at).toLocaleString()}</p>}<strong>View bundle →</strong></Link>})}
+    <section className="catalog-tools" aria-label="Practice bundle filters">
+      <form className="catalog-search" method="get">
+        <input name="q" defaultValue={query.q??''} placeholder="Search subjects, exams, or bundles" aria-label="Search practice bundles"/>
+        {category&&<input type="hidden" name="category" value={category}/>} 
+        <button type="submit">Search</button>
+      </form>
+      <div className="category-chips">
+        <Link className={`category-chip ${!category?'active':''}`} href={q?`/practice-library?q=${encodeURIComponent(q)}`:'/practice-library'}>All</Link>
+        {categories.map(c=><Link className={`category-chip ${category===c?'active':''}`} key={c} href={`/practice-library?category=${encodeURIComponent(c)}${q?`&q=${encodeURIComponent(q)}`:''}`}>{c}</Link>)}
+      </div>
+    </section>
 
-    <h2>Free practice</h2>
-    {!(freeResources??[]).length?<section className="card"><p className="muted">Free standalone practice resources will appear here as we add them.</p></section>:(freeResources??[]).map((r:any)=><section className="card" key={r.id}><div className="row between"><div><b>{r.title}</b><p className="muted">{r.subject} · {String(r.collection_type).replaceAll('_',' ')}</p></div><span className="pill">Free</span></div><p>{r.description}</p></section>)}
+    <div className="row between catalog-heading"><div><h2>Practice bundles</h2><p className="muted">{filtered.length} bundle{filtered.length===1?'':'s'} available</p></div>{(q||category)&&<Link href="/practice-library">Clear filters</Link>}</div>
+    {!filtered.length?<section className="card"><h3>No matching bundles</h3><p className="muted">Try a broader search or clear the category filter.</p></section>:<div className="bundle-carousel">
+      {filtered.map((b:any)=>{
+        const active=['paid','comped'].includes(b.entitlement_status??'')&&(!b.entitlement_expires_at||new Date(b.entitlement_expires_at).getTime()>Date.now())
+        const previews=previewsByBundle.get(b.bundle_id)??[]
+        return <section className="card bundle-card" key={b.bundle_id}>
+          <div className="row between"><div><h3>{b.title}</h3><p className="muted">{b.subject} · {b.resource_count} included resource{b.resource_count===1?'':'s'}</p></div><span className="pill">{active?'Access active':'24-hour cram available'}</span></div>
+          <p>{b.description}</p>
+          <p><b>24-hour, 3-day, 7-day, or 14-day access</b></p>
+          {active&&b.entitlement_expires_at&&<p className="good">Active through {new Date(b.entitlement_expires_at).toLocaleString()}</p>}
+          {previews.length>0&&<div className="bundle-previews">
+            <div className="row between"><b>Try free before you buy</b><span className="pill">{previews.length} free</span></div>
+            {previews.map((r:any)=><div className="preview-row" key={r.id}><div><b>{r.title}</b><p className="muted">{r.description}</p></div><span className="preview-free">Free</span></div>)}
+          </div>}
+          <Link className="button bundle-cta" href={`/practice-library/bundles/${b.bundle_id}`}>{active?'Continue bundle':'View bundle & start free'} →</Link>
+        </section>
+      })}
+    </div>}
 
-    <section className="card"><h2>Teacher-created practice stays private</h2><p className="muted">Individual teachers can create classroom, study, restricted, and paid practice shares, but those do not appear in the public platform catalog. Students reach those only through the teacher's specific link or assignment.</p>{profile?.role==='teacher'&&<Link href="/shared-library">Open teacher resource library →</Link>}</section>
+    <section className="card privacy-note"><h2>Teacher-created practice stays private</h2><p className="muted">Teacher classroom tests and paid teacher shares never appear in this public catalog. Students reach them only through the teacher's specific link or assignment.</p>{profile?.role==='teacher'&&<Link href="/shared-library">Open teacher resource library →</Link>}</section>
   </main>
 }
