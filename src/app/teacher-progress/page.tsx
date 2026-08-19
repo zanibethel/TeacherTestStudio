@@ -87,7 +87,7 @@ export default async function TeacherProgress({searchParams}:{searchParams:Promi
       const latestPractice=[...focused].sort((a,b)=>new Date(b.created_at).getTime()-new Date(a.created_at).getTime())[0]
       const weakAreas=(latestPractice?.selected_areas??[]) as string[]
       return{r,status,tone,highest,attempts:submitted.length+(active?1:0),latest,weakAreas,pastDue,dueSoon,urgency:urgency(status,pastDue,dueSoon)}
-    }).filter(Boolean).sort((a:AnyRow,b:AnyRow)=>b.urgency-a.urgency||rosterName(a.r).localeCompare(rosterName(b.r))) as AnyRow[]
+    }).filter((x):x is NonNullable<typeof x>=>x!==null).sort((a,b)=>b.urgency-a.urgency||rosterName(a.r).localeCompare(rosterName(b.r)))
     const counts={notStarted:rows.filter(x=>x.status==='Not started').length,inProgress:rows.filter(x=>x.status==='In progress').length,focus:rows.filter(x=>String(x.status).startsWith('Focused')).length,ready:rows.filter(x=>x.status==='Full retest unlocked').length,complete:rows.filter(x=>x.status==='Complete').length,attention:rows.filter(x=>x.urgency>=70).length}
     const maxUrgency=rows.length?Math.max(...rows.map(x=>x.urgency)):0
     return[{share,test,rows,shareGroupIds,counts,maxUrgency,pastDue,dueSoon}]
