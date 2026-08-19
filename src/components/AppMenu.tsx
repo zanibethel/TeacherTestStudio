@@ -18,6 +18,7 @@ export default function AppMenu({role,canInvite,isAdmin}:{role:string|null;canIn
         <Link href="/teacher-groups">Groups</Link>
         <Link href="/shared-library">Browse Test Bundles</Link>
         <Link href="/question-bank">Question Bank</Link>
+        <Link href="/profile">Profile</Link>
         <Link href="/suggest-content">Suggest CramLoop Content</Link>
         {canInvite&&<Link href="/teacher-access">Teacher Access</Link>}
       </>:<>
