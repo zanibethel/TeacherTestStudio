@@ -13,7 +13,7 @@ export default async function AppHeader(){
 
   return <header className="site-header">
     <div className="site-header-inner">
-      <Link className="brand" href={user?'/dashboard':'/'}><b>Teacher Test Studio</b></Link>
+      <Link className="brand" href={user?'/dashboard':'/'}><b>CramLoop</b></Link>
       {!user?<Link href="/login">Sign in</Link>:<details className="app-menu">
         <summary aria-label="Open navigation menu"><span className="hamburger" aria-hidden="true">☰</span><span className="menu-label">Menu</span></summary>
         <nav className="menu-panel" aria-label="Main navigation">
