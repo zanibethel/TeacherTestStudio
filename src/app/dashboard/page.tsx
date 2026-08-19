@@ -9,11 +9,31 @@ export default async function Dashboard({searchParams}:{searchParams:Promise<{er
   const{data:profile}=await supabase.from('profiles').select('full_name,role,teacher_approved,teacher_can_invite').eq('id',user.id).single();const query=await searchParams
   if(profile?.role==='teacher'){
     if(!profile.teacher_approved)return <main className="narrow"><div className="row between"><h1>Teacher access pending</h1><form action="/auth/signout" method="post"><button className="ghost">Sign out</button></form></div><section className="card"><p>This account does not have approved teacher access.</p><p className="muted">Teacher tools are invite-only. Ask the approved teacher who invited you to send a valid one-time invitation link.</p></section></main>
-    const{data:tests}=await supabase.from('tests').select('id,title,status,share_code,created_at,updated_at,randomize_questions,assessment_type,attempts(count)').order('updated_at',{ascending:false})
-    const{count:bankCount}=await supabase.from('question_bank').select('*',{count:'exact',head:true})
+    const now=Date.now();const soon=now+48*60*60*1000
+    const[{data:tests},{count:bankCount},{count:pendingConnections},{data:activeShares}]=await Promise.all([
+      supabase.from('tests').select('id,title,status,share_code,created_at,updated_at,randomize_questions,assessment_type,attempts(count)').order('updated_at',{ascending:false}),
+      supabase.from('question_bank').select('*',{count:'exact',head:true}),
+      supabase.from('student_teacher_connection_requests').select('*',{count:'exact',head:true}).eq('teacher_id',user.id).eq('status','pending'),
+      supabase.from('test_shares').select('id,label,due_at,created_at,test:tests(title)').eq('teacher_id',user.id).eq('active',true).order('created_at',{ascending:false})
+    ])
+    const classroomShares=(activeShares??[]).filter((s:any)=>s.due_at||s.label)
+    const dueSoon=classroomShares.filter((s:any)=>{if(!s.due_at)return false;const due=new Date(s.due_at).getTime();return due>now&&due<=soon})
+    const pastDue=classroomShares.filter((s:any)=>s.due_at&&new Date(s.due_at).getTime()<=now)
+    const attentionCount=(pendingConnections??0)+dueSoon.length+pastDue.length
     return <main>
       <div className="dashboard-heading"><div><span className="eyebrow">TEACHER WORKSPACE</span><h1>Teacher dashboard</h1><p className="muted">Welcome, {profile.full_name||user.email}</p></div><form action="/auth/signout" method="post"><button className="ghost">Sign out</button></form></div>
       {query.error&&<p className="bad notice">{query.error}</p>}
+
+      <section className="card" style={{padding:18}}>
+        <div className="row between" style={{alignItems:'flex-start'}}><div><span className="eyebrow">WHAT NEEDS ME</span><h2 style={{margin:'5px 0 3px'}}>Classroom attention</h2><p className="muted" style={{margin:0}}>Start with the items most likely to need action today.</p></div><span className="pill" style={{background:attentionCount?'#fff7ed':'#ecfdf5',color:attentionCount?'#c2410c':'#047857'}}>{attentionCount?`${attentionCount} item${attentionCount===1?'':'s'}`:'All clear'}</span></div>
+        <div className="dashboard-tool-grid" style={{marginTop:14}}>
+          <Link className="dashboard-tool" href="/teacher-roster"><b>Student requests</b><span>{pendingConnections??0} waiting for approval</span></Link>
+          <Link className="dashboard-tool" href="/teacher-progress"><b>Due soon</b><span>{dueSoon.length} assignment{dueSoon.length===1?'':'s'} due within 48 hours</span></Link>
+          <Link className="dashboard-tool" href="/teacher-progress"><b>Past due</b><span>{pastDue.length} active assignment{pastDue.length===1?'':'s'} past due</span></Link>
+          <Link className="dashboard-tool" href="/reports"><b>Active assignments</b><span>{classroomShares.length} classroom share{classroomShares.length===1?'':'s'} active</span></Link>
+        </div>
+      </section>
+
       <section className="card dashboard-actions">
         <div className="dashboard-primary-actions"><Link className="button dashboard-create" href="/tests/new">+ Create a test</Link></div>
         <div className="dashboard-tool-grid"><Link className="dashboard-tool" href="/question-bank"><b>Question bank</b><span>{bankCount??0} saved questions</span></Link><Link className="dashboard-tool" href="/shared-library"><b>Shared resources</b><span>Browse reusable teacher content</span></Link><Link className="dashboard-tool" href="/teacher-progress"><b>Student progress</b><span>See who needs attention now</span></Link><Link className="dashboard-tool" href="/teacher-roster"><b>Student roster</b><span>Manage your students</span></Link><Link className="dashboard-tool" href="/teacher-groups"><b>Groups</b><span>Organize classes and cohorts</span></Link>{profile.teacher_can_invite&&<Link className="dashboard-tool" href="/teacher-access"><b>Teacher access</b><span>Invite approved teachers</span></Link>}</div>
