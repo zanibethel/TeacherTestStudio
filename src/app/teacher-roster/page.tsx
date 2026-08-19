@@ -51,10 +51,10 @@ export default async function TeacherRoster({searchParams}:{searchParams:Promise
       return <section className="card roster-student-card" key={r.id}>
         <div className="row between roster-student-summary">
           <div>{displayName&&<b>{displayName}</b>}<p style={{margin:displayName?'4px 0':'0'}}>{r.student_email}</p>{classes.length>0&&<div className="row roster-class-pills">{classes.map(name=><span className="pill" key={name}>{name}</span>)}</div>}<p className="muted">{r.student_id?'Account connected':'Waiting for matching student account'}</p></div>
-          <div className="row"><details className="roster-edit-details"><summary className="secondary button">Edit</summary></details><form action={removeStudent.bind(null,r.id)}><button className="ghost">Remove</button></form></div>
+          <form action={removeStudent.bind(null,r.id)}><button className="ghost">Remove</button></form>
         </div>
         <details className="roster-edit-panel">
-          <summary>Edit student details</summary>
+          <summary>Edit student</summary>
           <form action={updateStudentRoster.bind(null,r.id)} className="stack roster-edit-form">
             <div className="settings-grid">
               <div><label>First name <span className="muted">(optional)</span></label><input name="first_name" defaultValue={r.student_first_name??''} autoComplete="given-name"/></div>
@@ -62,9 +62,9 @@ export default async function TeacherRoster({searchParams}:{searchParams:Promise
             </div>
             <label>Student email</label>
             <input name="email" type="email" required defaultValue={r.student_email} autoComplete="email"/>
-            {(groups??[]).length>0&&<fieldset className="roster-class-fieldset"><legend>Current classes</legend><div className="roster-class-checks">{groupOptions.map(group=><label className="check" key={group.id}><input type="checkbox" name="group_ids" value={group.id} defaultChecked={selectedGroupIds.has(group.id)}/><span>{group.name}</span></label>)}</div></fieldset>}
+            {groupOptions.length>0&&<fieldset className="roster-class-fieldset"><legend>Classes</legend><div className="roster-class-checks">{groupOptions.map(group=><label className="check" key={group.id}><input type="checkbox" name="group_ids" value={group.id} defaultChecked={selectedGroupIds.has(group.id)}/><span>{group.name}</span></label>)}</div></fieldset>}
             <ClassAutocomplete groups={groupOptions} name="class_name" inputId={`roster-class-${rosterId}`} label="Add or create another class" helperMode="add"/>
-            <p className="muted">Uncheck a current class to remove the student from it. Type another class to add or create one.</p>
+            <p className="muted">Uncheck a class to remove the student from it. Type another class to add or create one.</p>
             <div className="row"><button type="submit">Save changes</button><Link className="secondary button" href="/teacher-groups">Manage classes</Link></div>
           </form>
         </details>
