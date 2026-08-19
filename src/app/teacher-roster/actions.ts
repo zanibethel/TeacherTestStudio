@@ -18,6 +18,27 @@ export async function addStudentEmail(fd:FormData){
   redirect('/teacher-roster?message='+encodeURIComponent(groupName?`Student added to your roster and ${groupName}.`:'Student added to your roster.'))
 }
 
+export async function updateStudentRoster(rosterId:string,fd:FormData){
+  const{supabase}=await teacher()
+  const email=String(fd.get('email')||'').trim().toLowerCase()
+  const firstName=String(fd.get('first_name')||'').trim()
+  const lastName=String(fd.get('last_name')||'').trim()
+  const className=String(fd.get('class_name')||'').trim()
+  const groupIds=fd.getAll('group_ids').map(String).filter(Boolean)
+  const{data,error}=await supabase.rpc('update_teacher_student_roster',{
+    p_roster_id:rosterId,
+    p_email:email,
+    p_first_name:firstName||null,
+    p_last_name:lastName||null,
+    p_group_ids:groupIds,
+    p_class_name:className||null
+  })
+  if(error)redirect(`/teacher-roster?error=${encodeURIComponent(error.message)}`)
+  revalidatePath('/teacher-roster');revalidatePath('/teacher-groups')
+  const groupName=(data as any)?.group_name
+  redirect('/teacher-roster?message='+encodeURIComponent(groupName?`Student updated and added to ${groupName}.`:'Student roster entry updated.'))
+}
+
 export async function removeStudent(rosterId:string){
   const{supabase}=await teacher();const{error}=await supabase.rpc('remove_teacher_student_roster',{p_roster_id:rosterId})
   if(error)redirect(`/teacher-roster?error=${encodeURIComponent(error.message)}`);revalidatePath('/teacher-roster')
