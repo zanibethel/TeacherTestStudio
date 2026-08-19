@@ -13,10 +13,10 @@ export default async function TakeTest({params,searchParams}:{params:Promise<{id
   const{data:attemptId,error:startError}=await supabase.rpc('start_test_attempt',{p_test_id:id});if(startError)return <main><h1>{test.title}</h1><p className="bad">{startError.message}</p><a className="button" href="/dashboard">Back to dashboard</a></main>
   const[{data:attempt},{data:lockedRows}]=await Promise.all([
     supabase.from('attempts').select('id,deadline_at,attempt_number,responses(question_id,choice_id)').eq('id',attemptId).single(),
-    supabase.from('attempt_questions').select('question_id,question_position').eq('attempt_id',attemptId).order('question_position')
+    supabase.from('attempt_questions').select('question_id,position').eq('attempt_id',attemptId).order('position')
   ]);if(!attempt)notFound()
   const initialAnswers:Record<string,string>={};for(const r of(attempt.responses??[]) as any[])if(r.choice_id)initialAnswers[r.question_id]=r.choice_id
-  const locked=new Map((lockedRows??[]).map((r:any)=>[r.question_id,Number(r.question_position)]))
+  const locked=new Map((lockedRows??[]).map((r:any)=>[r.question_id,Number(r.position)]))
   const source=(test.questions??[]).filter((q:any)=>!locked.size||locked.has(q.id))
   const ordered=[...source].sort((a:any,b:any)=>(locked.get(a.id)??a.position)-(locked.get(b.id)??b.position))
   const fresh=query.fresh==='1'&&Boolean(test.randomized_retest_enabled)
