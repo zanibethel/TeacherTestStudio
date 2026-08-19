@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import './exam.css'
 
 type Choice = { id:string; label:string; position:number }
 type Question = { id:string; prompt:string; position:number; choices:Choice[] }
@@ -27,13 +28,18 @@ export default function ExamRunner(props:Props){
   const formRef=useRef<HTMLFormElement>(null)
   const submitted=useRef(false)
   const suppressFullscreen=useRef(false)
+  const touchStart=useRef<{x:number;y:number}|null>(null)
+  const dotRefs=useRef<Array<HTMLButtonElement|null>>([])
   const answeredCount=useMemo(()=>Object.values(answers).filter(Boolean).length,[answers])
+  const unanswered=useMemo(()=>questions.map((q,i)=>answers[q.id]?null:i).filter((i):i is number=>i!==null),[answers,questions])
 
   useEffect(()=>{
     if(!deadlineAt)return
     const tick=()=>{const left=Math.max(0,Math.floor((new Date(deadlineAt).getTime()-Date.now())/1000));setRemaining(left);if(left===0&&!submitted.current){submitted.current=true;const auto=formRef.current?.querySelector<HTMLInputElement>('input[name="auto_submit"]');if(auto)auto.value='1';formRef.current?.requestSubmit()}}
     tick();const timer=window.setInterval(tick,1000);return()=>window.clearInterval(timer)
   },[deadlineAt])
+
+  useEffect(()=>{dotRefs.current[current]?.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'})},[current])
 
   async function recordViolation(type:string){
     if(!strictMode||!started||submitted.current)return
@@ -58,22 +64,47 @@ export default function ExamRunner(props:Props){
   async function beginStrict(){try{await document.documentElement.requestFullscreen()}catch{}setStarted(true)}
   function choose(questionId:string,choiceId:string){const next={...answers,[questionId]:choiceId};setAnswers(next);if(allowSaveResume)startTransition(()=>{void saveAction(next)})}
   function submit(){submitted.current=true;suppressFullscreen.current=true;if(document.fullscreenElement)void document.exitFullscreen()}
+  function previous(){setCurrent(i=>Math.max(0,i-1))}
+  function next(){
+    if(current<questions.length-1){setCurrent(i=>i+1);return}
+    const nextUnanswered=unanswered.find(i=>i!==current)
+    if(nextUnanswered!==undefined)setCurrent(nextUnanswered)
+  }
+  function onTouchStart(e:React.TouchEvent){const t=e.touches[0];touchStart.current={x:t.clientX,y:t.clientY}}
+  function onTouchEnd(e:React.TouchEvent){
+    const start=touchStart.current;touchStart.current=null;if(!start)return
+    const t=e.changedTouches[0],dx=t.clientX-start.x,dy=t.clientY-start.y
+    if(Math.abs(dx)<55||Math.abs(dx)<=Math.abs(dy)*1.2)return
+    if(dx<0)next();else previous()
+  }
   const question=questions[current]
   const warning=Boolean(deadlineAt)&&remaining<=300
+  const atEnd=current===questions.length-1
+  const hasOtherUnanswered=unanswered.some(i=>i!==current)
+  const canSubmit=answeredCount===questions.length
 
   if(strictMode&&!started)return <main className="exam-shell"><section className="card"><p className="eyebrow">Strict Test Mode</p><h1>{title}</h1><p>This test monitors tab/app changes, fullscreen exits, copy/paste attempts, and right-click activity. These events are recorded for your teacher.</p><p className="muted">Attempt {attemptNumber}. Once you begin, stay in this test window until you submit.</p><button type="button" onClick={beginStrict}>Begin test in fullscreen</button></section></main>
 
-  return <main className="exam-shell">
-    <header className="exam-header"><div><p className="eyebrow">Attempt {attemptNumber}{strictMode?' · Strict Test Mode':''}</p><h1>{title}</h1></div><div className={`timer ${warning?'timer-warning':''}`}><span>Time remaining</span><b>{deadlineAt?formatTime(remaining):'Untimed'}</b></div></header>
-    {description&&<p className="muted">{description}</p>}
-    {notice&&<p className="bad">{notice}</p>}
-    <div className="exam-meta"><span>{answeredCount} of {questions.length} answered</span><span>Passing target: {passingScore}%</span>{strictMode&&<span>Integrity events: {violations}</span>}{allowSaveResume&&<span>{isPending?'Saving…':'Progress saved'}</span>}</div>
+  return <main className={`exam-shell ${oneQuestionPerPage?'exam-single-page':''}`}>
+    <header className="exam-header"><div className="exam-title-block"><p className="eyebrow">Attempt {attemptNumber}{strictMode?' · Restricted':''}</p><h1>{title}</h1></div><div className={`timer ${warning?'timer-warning':''}`}><span>Time</span><b>{deadlineAt?formatTime(remaining):'Untimed'}</b></div></header>
+    {description&&<p className="muted exam-description">{description}</p>}
+    {notice&&<p className="bad exam-notice">{notice}</p>}
+    <div className="exam-meta"><span>{answeredCount}/{questions.length} answered</span><span>Pass {passingScore}%</span>{strictMode&&<span>{violations} integrity event{violations===1?'':'s'}</span>}{allowSaveResume&&<span>{isPending?'Saving…':'Saved'}</span>}</div>
     <form ref={formRef} action={action} onSubmit={submit}>
       <input type="hidden" name="auto_submit" defaultValue="0"/>
       {questions.map(q=><input key={q.id} type="hidden" name={`q_${q.id}`} value={answers[q.id]??''}/>) }
       {oneQuestionPerPage?<>
-        <section className="card exam-question"><p className="question-progress">Question {current+1} of {questions.length}</p><h2>{question.prompt}</h2>{question.choices.map(c=><label className={`answer ${answers[question.id]===c.id?'answer-selected':''}`} key={c.id}><input type="radio" name={`visible_${question.id}`} checked={answers[question.id]===c.id} onChange={()=>choose(question.id,c.id)}/><span>{c.label}</span></label>)}</section>
-        <div className="exam-nav"><button className="secondary" type="button" onClick={()=>setCurrent(i=>Math.max(0,i-1))} disabled={current===0}>Previous</button><div className="question-dots">{questions.map((q,i)=><button type="button" key={q.id} className={`question-dot ${i===current?'current':''} ${answers[q.id]?'answered':''}`} onClick={()=>setCurrent(i)}>{i+1}</button>)}</div>{current<questions.length-1?<button type="button" onClick={()=>setCurrent(i=>Math.min(questions.length-1,i+1))}>Next</button>:<button type="submit">Submit exam</button>}</div>
+        <section className="card exam-question exam-question-stage" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+          <p className="question-progress">Question {current+1} of {questions.length}</p>
+          <h2>{question.prompt}</h2>
+          <div className="exam-answer-list">{question.choices.map(c=><label className={`answer ${answers[question.id]===c.id?'answer-selected':''}`} key={c.id}><input type="radio" name={`visible_${question.id}`} checked={answers[question.id]===c.id} onChange={()=>choose(question.id,c.id)}/><span>{c.label}</span></label>)}</div>
+          <p className="swipe-hint">Swipe left/right to move between questions.</p>
+        </section>
+        <div className="exam-mobile-dock">
+          <div className="question-dots" aria-label="Question navigation">{questions.map((q,i)=><button ref={el=>{dotRefs.current[i]=el}} type="button" key={q.id} className={`question-dot ${i===current?'current':''} ${answers[q.id]?'answered':''}`} onClick={()=>setCurrent(i)} aria-label={`Question ${i+1}${answers[q.id]?', answered':', unanswered'}`}>{i+1}</button>)}</div>
+          <div className="exam-nav-buttons"><button className="secondary" type="button" onClick={previous} disabled={current===0}>Previous</button>{atEnd&&!hasOtherUnanswered?<button type="submit">Submit exam</button>:<button type="button" onClick={next}>{atEnd&&hasOtherUnanswered?'Next unanswered':'Next'}</button>}</div>
+          {!canSubmit&&atEnd&&!hasOtherUnanswered&&<span className="exam-unanswered-note">Review unanswered questions before submitting.</span>}
+        </div>
       </>:<>{questions.map((q,index)=><section className="card exam-question" key={q.id}><p className="question-progress">Question {index+1} of {questions.length}</p><h2>{q.prompt}</h2>{q.choices.map(c=><label className={`answer ${answers[q.id]===c.id?'answer-selected':''}`} key={c.id}><input type="radio" name={`visible_${q.id}`} checked={answers[q.id]===c.id} onChange={()=>choose(q.id,c.id)}/><span>{c.label}</span></label>)}</section>)}<button type="submit">Submit exam</button></>}
     </form>
   </main>
