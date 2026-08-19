@@ -36,7 +36,7 @@ export default async function AppHeader(){
             <Link href="/practice-library">Browse Practice Passes</Link>
             <Link href="/find-teacher">Find My Teacher</Link>
           </>}
-          {isAdmin&&<><span className="menu-section-label">Platform</span><Link href="/admin/bundles">Bundle Manager</Link></>}
+          {isAdmin&&<><span className="menu-section-label">Platform</span><Link href="/admin/bundles">Bundle Manager</Link><Link href="/admin/pricing">Special Pricing</Link></>}
           <form action="/auth/signout" method="post"><button className="menu-logout" type="submit">Log out</button></form>
         </nav>
       </details>}
