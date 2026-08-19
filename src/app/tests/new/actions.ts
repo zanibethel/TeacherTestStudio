@@ -15,9 +15,14 @@ export async function createTest(formData: FormData) {
   const chapterLabel = String(formData.get('chapter_label') ?? '')
   const questionsPerAttempt = Number(formData.get('questions_per_attempt') ?? 0)
   const requireFocusedRetake = formData.get('require_focused_retake_before_full') === 'on'
+  const focusedRetakePercent = Number(formData.get('focused_retake_percent') ?? 50)
+  const focusedRetakeMinScore = Number(formData.get('focused_retake_min_score') ?? 0)
+  const focusedRetakeHints = formData.get('focused_retake_hints') === 'on'
+  const unlimitedAttemptsUntilDue = formData.get('unlimited_attempts_until_due') === 'on'
+  const maxAttempts = Number(formData.get('max_attempts') ?? 1)
   let questions: unknown
   try { questions = JSON.parse(String(formData.get('questions') ?? '[]')) } catch { redirect('/tests/new?error=Invalid+question+data') }
-  const { data, error } = await supabase.rpc('create_test_with_questions_v4', {
+  const { data, error } = await supabase.rpc('create_test_with_questions_v6', {
     p_title: title,
     p_description: description,
     p_randomize: randomize,
@@ -30,6 +35,11 @@ export async function createTest(formData: FormData) {
     p_questions: questions,
     p_questions_per_attempt: questionsPerAttempt > 0 ? questionsPerAttempt : null,
     p_require_focused_retake_before_full: requireFocusedRetake,
+    p_focused_retake_percent: focusedRetakePercent,
+    p_focused_retake_min_score: focusedRetakeMinScore,
+    p_focused_retake_hints: focusedRetakeHints,
+    p_unlimited_attempts_until_due: unlimitedAttemptsUntilDue,
+    p_max_attempts: maxAttempts,
   })
   if (error) redirect('/tests/new?error=' + encodeURIComponent(error.message))
   redirect(`/tests/${data}`)
