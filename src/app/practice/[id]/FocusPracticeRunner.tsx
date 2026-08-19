@@ -12,9 +12,15 @@ export default function FocusPracticeRunner({title,questions,showHints,required,
   const[openHint,setOpenHint]=useState<string|null>(null)
   const stripRef=useRef<HTMLDivElement>(null)
   const touchStart=useRef<{x:number;y:number;target:EventTarget|null}|null>(null)
+  const ignoreChoiceUntil=useRef(0)
   const answeredCount=useMemo(()=>Object.keys(answers).length,[answers])
   const question=questions[current]
   const unanswered=questions.map((q,i)=>answers[q.question_id]===undefined?i:-1).filter(i=>i>=0)
+
+  useEffect(()=>{
+    document.body.classList.add('focus-practice-active')
+    return()=>document.body.classList.remove('focus-practice-active')
+  },[])
 
   useEffect(()=>{
     const button=stripRef.current?.querySelector<HTMLButtonElement>(`button[data-index="${current}"]`)
@@ -22,7 +28,10 @@ export default function FocusPracticeRunner({title,questions,showHints,required,
     setOpenHint(null)
   },[current])
 
-  function choose(index:number){setAnswers(prev=>({...prev,[question.question_id]:index}))}
+  function choose(index:number){
+    if(Date.now()<ignoreChoiceUntil.current)return
+    setAnswers(prev=>({...prev,[question.question_id]:index}))
+  }
   function previous(){setCurrent(i=>Math.max(0,i-1))}
   function next(){
     if(current<questions.length-1){setCurrent(i=>i+1);return}
@@ -36,6 +45,8 @@ export default function FocusPracticeRunner({title,questions,showHints,required,
     if(Math.abs(dx)<55||Math.abs(dx)<Math.abs(dy)*1.25)return
     const target=start.target as HTMLElement|null
     if(target?.closest('button'))return
+    ignoreChoiceUntil.current=Date.now()+350
+    e.preventDefault()
     if(dx<0)next();else previous()
   }
   const atEnd=current===questions.length-1
@@ -43,7 +54,7 @@ export default function FocusPracticeRunner({title,questions,showHints,required,
   const nextLabel=atEnd&&!allAnswered?'Next unanswered':atEnd?'Review & submit':'Next'
 
   return <main className="focus-shell">
-    <header className="focus-topbar"><div><span className="eyebrow">Focused retest</span><h1>{title}</h1></div><div className="focus-progress"><b>{answeredCount} of {questions.length}</b><span>answered</span></div></header>
+    <header className="focus-topbar"><div><span className="eyebrow">Focused retest</span><h1>{title}</h1></div><div className="focus-progress" aria-label={`${answeredCount} of ${questions.length} answered`}><b>{answeredCount} of {questions.length}</b><span>answered</span></div></header>
     <div className="focus-ruleline">{required?(minScore===0?'Completion unlocks the next full attempt':`${minScore}% required to unlock the next full attempt`):'Focused practice'}</div>
     <form action={action} className="focus-form">
       {questions.map(q=><input key={q.question_id} type="hidden" name={`q_${q.question_id}`} value={answers[q.question_id]??''}/>) }
