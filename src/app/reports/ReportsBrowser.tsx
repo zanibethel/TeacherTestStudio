@@ -8,12 +8,13 @@ type Attempt={id:string;attemptNumber:number;submittedAt:string|null;score:numbe
 type StudentResult={key:string;label:string;accessed:boolean;completed:boolean;best:number|null;attempts:Attempt[]}
 type Report={id:string;testId:string;testTitle:string;label:string;experienceName:string|null;createdAt:string;dueAt:string|null;active:boolean;deliveryMode:string;audienceMode:string;maxAttempts:number;unlimited:boolean;focusedRequired:boolean;focusedPercent:number;focusedMin:number;focusedHints:boolean;studyGuide:boolean;randomizedRetest:boolean;restricted:boolean;linkExpiresAt:string|null;groupIds:string[];groupNames:string[];studentRefs:string[];studentLabels:string[];students:StudentResult[]}
 type Option={value:string;label:string}
+type InitialFilters={q?:string;test?:string;assignment?:string;group?:string;student?:string}
 
 const norm=(v:string)=>v.toLowerCase().replace(/\s+/g,' ').trim()
 const fmt=(v:string|null)=>v?new Date(v).toLocaleString():'None'
 
-export default function ReportsBrowser({reports,tests,groups,students}:{reports:Report[];tests:Option[];groups:Option[];students:Option[]}){
- const[q,setQ]=useState('');const[test,setTest]=useState('');const[assignment,setAssignment]=useState('');const[group,setGroup]=useState('');const[student,setStudent]=useState('')
+export default function ReportsBrowser({reports,tests,groups,students,initialFilters={}}:{reports:Report[];tests:Option[];groups:Option[];students:Option[];initialFilters?:InitialFilters}){
+ const[q,setQ]=useState(initialFilters.q??'');const[test,setTest]=useState(initialFilters.test??'');const[assignment,setAssignment]=useState(initialFilters.assignment??'');const[group,setGroup]=useState(initialFilters.group??'');const[student,setStudent]=useState(initialFilters.student??'')
  const assignments=useMemo(()=>reports.map(r=>({value:r.id,label:`${r.label} — ${r.testTitle}`})),[reports])
  const filtered=useMemo(()=>{const needle=norm(q);return reports.filter(r=>{
    const search=norm([r.testTitle,r.label,r.experienceName||'',...r.groupNames,...r.studentLabels].join(' '))
@@ -38,7 +39,7 @@ export default function ReportsBrowser({reports,tests,groups,students}:{reports:
    const experience=r.experienceName||mode
    const attempts=r.unlimited?'Unlimited until due date':`${r.maxAttempts} full attempt${r.maxAttempts===1?'':'s'}`
    const focus=r.focusedRequired?`Required · ${r.focusedPercent}% size · ${r.focusedMin}% to proceed`:r.studyGuide?'Optional learning path':'Not required'
-   return <details className={`card ${styles.report}`} key={r.id}>
+   return <details className={`card ${styles.report}`} key={r.id} open={Boolean(initialFilters.assignment===r.id||initialFilters.student&&r.studentRefs.includes(initialFilters.student))}>
     <summary>
      <div className={styles.heading}><div><span className="eyebrow">{r.label}</span><h2>{r.testTitle}</h2><div className={styles.preset}><span>Preset</span><b>{experience}</b></div></div><span className="pill">{r.active?'Active':'Disabled'}</span></div>
      <div className={styles.stats}><div><span>Assigned</span><b>{new Date(r.createdAt).toLocaleDateString()}</b></div><div><span>Due</span><b>{r.dueAt?new Date(r.dueAt).toLocaleDateString():'No due date'}</b></div><div className={styles.accessStat}><span>Accessed</span><b>{accessed}</b></div><div className={styles.completeStat}><span>Taken</span><b>{completed}</b></div></div>
