@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 export async function createFocusPractice(attemptId:string,fd:FormData){
   const supabase=await createClient()
   const areas=fd.getAll('areas').map(String).filter(Boolean)
-  const count=Math.max(5,Math.min(30,Number(fd.get('question_count')||10)))
+  const count=Math.max(1,Math.min(200,Number(fd.get('question_count')||10)))
   const{data,error}=await supabase.rpc('create_focus_practice_session',{p_attempt_id:attemptId,p_areas:areas,p_question_count:count})
   if(error)redirect(`/attempts/${attemptId}?practice_error=${encodeURIComponent(error.message)}`)
   redirect(`/practice/${data}`)
