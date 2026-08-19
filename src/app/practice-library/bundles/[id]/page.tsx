@@ -8,7 +8,7 @@ function durationLabel(hours:number){
   if(hours%24===0)return `${hours/24} days`
   return `${hours} hours`
 }
-
+function monthYear(value:string|null|undefined){if(!value)return null;const d=new Date(`${value}T00:00:00`);return d.toLocaleDateString(undefined,{month:'long',year:'numeric'})}
 function readinessLabel(score:number|null){
   if(score==null)return 'Not started'
   if(score>=85)return 'Strong readiness'
@@ -30,10 +30,13 @@ export default async function PracticeBundleDetail({params,searchParams}:{params
   const readinessScore=readiness?.readiness_score==null?null:Number(readiness.readiness_score)
   const recommended=resources.find((r:any)=>r.id===readiness?.recommended_collection_id)
   const recommendedUnlocked=Boolean(recommended&&(activePass||recommended.is_free_preview))
+  const currentLabel=monthYear(bundle.current_as_of)
   return <main>
     <Link href="/practice-library">← Practice library</Link>
-    <div className="row between"><div><h1>{bundle.title}</h1><p className="muted">{bundle.subject}</p></div><span className="pill">{activePass?'Pass active':'Cram & prep access'}</span></div>
+    <div className="row between"><div><h1>{bundle.title}</h1><p className="muted">{bundle.subject}</p></div><span className="pill">{activePass?'Pass active':bundle.verified?'CramLoop Verified':'Cram & prep access'}</span></div>
     {query.error&&<p className="bad">{query.error}</p>}{query.selected&&<p className="good">Access option selected. Checkout will activate the timed access window once payments are connected.</p>}
+
+    {bundle.verified&&<section className="card"><div className="row between"><div><h2 style={{marginBottom:4}}>✓ CramLoop Verified</h2><p className="muted">This platform bundle has been deliberately reviewed for its stated exam or skill goal.</p></div><span className="pill">Version {bundle.content_version||'1.0'}</span></div><div className="grid two"><div><span className="muted">Current as of</span><p><b>{currentLabel||'Review date not published'}</b></p></div><div><span className="muted">Last platform review</span><p><b>{bundle.reviewed_at?new Date(bundle.reviewed_at).toLocaleDateString():'—'}</b></p></div></div>{bundle.alignment_note&&<><span className="muted">Alignment</span><p>{bundle.alignment_note}</p></>}</section>}
 
     <section className="card">
       <div className="row between"><div><h2 style={{marginBottom:4}}>Your readiness</h2><p className="muted">Based on your actual CramLoop practice in this bundle. Recent sessions count more heavily.</p></div><span className="pill">{readinessLabel(readinessScore)}</span></div>
