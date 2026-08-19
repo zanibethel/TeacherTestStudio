@@ -1,6 +1,7 @@
 import './globals.css'
 import './nav.css'
 import AppHeader from '@/components/AppHeader'
+import SiteFooter from '@/components/SiteFooter'
 
 export const metadata={
   title:'CramLoop',
@@ -9,5 +10,5 @@ export const metadata={
 }
 
 export default function RootLayout({children}:{children:React.ReactNode}){
-  return <html lang="en"><body><AppHeader/>{children}</body></html>
+  return <html lang="en"><body><AppHeader/>{children}<SiteFooter/></body></html>
 }
