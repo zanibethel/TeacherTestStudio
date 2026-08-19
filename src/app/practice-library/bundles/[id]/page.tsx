@@ -16,14 +16,17 @@ function readinessLabel(score:number|null){
   return 'Needs focus'
 }
 function stars(value:number){return '★'.repeat(Math.max(0,Math.min(5,Math.round(value))))+'☆'.repeat(Math.max(0,5-Math.round(value)))}
+function signed(value:number|null|undefined){if(value==null)return '—';const n=Number(value);return `${n>0?'+':''}${n.toFixed(0)}%`}
+function movement(value:number|null|undefined){if(value==null)return 'No trend yet';const n=Number(value);if(n>=8)return 'Improving';if(n<=-8)return 'Slipping';return 'Mostly steady'}
 
 export default async function PracticeBundleDetail({params,searchParams}:{params:Promise<{id:string}>,searchParams:Promise<{error?:string;selected?:string;reviewed?:string}>}){
   const{id}=await params;const query=await searchParams;const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
   const{data:profile}=await supabase.from('profiles').select('role').eq('id',user.id).single();if(profile?.role!=='student')redirect('/dashboard')
-  const[{data:bundle,error},{data:readiness},{data:reviewData}]=await Promise.all([
+  const[{data:bundle,error},{data:readiness},{data:reviewData},{data:progress}]=await Promise.all([
     supabase.rpc('get_practice_bundle_detail',{p_bundle_id:id}),
     supabase.rpc('get_bundle_readiness',{p_bundle_id:id}),
-    supabase.rpc('get_practice_bundle_reviews',{p_bundle_id:id})
+    supabase.rpc('get_practice_bundle_reviews',{p_bundle_id:id}),
+    supabase.rpc('get_bundle_progress',{p_bundle_id:id})
   ]);if(error||!bundle?.id)notFound()
   const activePass=['paid','comped'].includes(bundle.entitlement_status??'')&&(!bundle.entitlement_expires_at||new Date(bundle.entitlement_expires_at).getTime()>Date.now())
   const resources=Array.isArray(bundle.resources)?bundle.resources:[]
@@ -37,6 +40,8 @@ export default async function PracticeBundleDetail({params,searchParams}:{params
   const avgRating=reviewData?.average_rating==null?null:Number(reviewData.average_rating)
   const reviewCount=Number(reviewData?.review_count||0)
   const myReview=reviewData?.user_review
+  const progressSessions=Array.isArray(progress?.sessions)?progress.sessions:[]
+  const progressTopics=Array.isArray(progress?.topics)?progress.topics:[]
   return <main>
     <Link href="/practice-library">← Practice library</Link>
     <div className="row between"><div><h1>{bundle.title}</h1><p className="muted">{bundle.subject}</p></div><span className="pill">{activePass?'Pass active':bundle.verified?'CramLoop Verified':'Cram & prep access'}</span></div>
@@ -61,6 +66,21 @@ export default async function PracticeBundleDetail({params,searchParams}:{params
         <p className="muted">{readiness.answered_questions} answered question{Number(readiness.answered_questions)===1?'':'s'} across {readiness.areas_seen} of {readiness.areas_total} topic areas.</p>
         {readiness.weakest_area&&<section className="question-summary"><b>Practice next: {readiness.weakest_area}</b><p className="muted">Current mastery estimate: {Number(readiness.weakest_mastery||0).toFixed(0)}%. CramLoop recommends strengthening this area before another full readiness test.</p>{recommendedUnlocked&&<form action={startBundlePractice.bind(null,id,recommended.id)} className="row"><input type="hidden" name="question_count" value="10"/><button>Practice this area next</button></form>}{recommended&&!recommendedUnlocked&&<p className="muted">{recommended.title} is included with an active cram or prep pass.</p>}</section>}
         {topics.length>0&&<><h3>Topic mastery</h3><div className="stack">{topics.map((t:any)=><div className="row between question-summary" key={t.area}><span><b>{t.area}</b><span className="muted"> · {t.answered} answered</span></span><b>{Number(t.mastery).toFixed(0)}%</b></div>)}</div></>}
+      </>}
+    </section>
+
+    <section className="card">
+      <div className="row between"><div><h2 style={{marginBottom:4}}>Your progress</h2><p className="muted">See whether repeated practice is actually moving your scores and topic mastery.</p></div>{Number(progress?.completed_sessions||0)>1&&<span className="pill">{signed(progress?.overall_change)} overall</span>}</div>
+      {progressSessions.length<2?<p className="muted">Complete at least two practice sessions to establish a progress trend.</p>:<>
+        <div className="grid three pass-stats">
+          <div><span className="muted">First score</span><b>{Number(progress.first_score||0).toFixed(0)}%</b></div>
+          <div><span className="muted">Latest score</span><b>{Number(progress.latest_score||0).toFixed(0)}%</b></div>
+          <div><span className="muted">Change</span><b>{signed(progress.overall_change)}</b></div>
+        </div>
+        {progress.strongest_improvement_area&&<p className="good"><b>Strongest improvement:</b> {progress.strongest_improvement_area} {signed(progress.strongest_improvement_change)}</p>}
+        {progress.attention_area&&<div className="question-summary"><b>Needs attention: {progress.attention_area}</b><p className="muted">Recent mastery {Number(progress.attention_mastery||0).toFixed(0)}% · {movement(progress.attention_change)} ({signed(progress.attention_change)}).</p></div>}
+        <h3>Recent practice</h3><div className="stack">{progressSessions.slice(-6).reverse().map((s:any)=><div className="row between question-summary" key={s.session_id}><span><b>Session {s.sequence}</b><span className="muted"> · {new Date(s.practiced_at).toLocaleDateString()}</span></span><b>{Number(s.score||0).toFixed(0)}%</b></div>)}</div>
+        {progressTopics.length>0&&<><h3>Topic movement</h3><div className="stack">{progressTopics.map((t:any)=><div className="row between question-summary" key={t.area}><span><b>{t.area}</b><span className="muted"> · recent {t.recent_mastery==null?'—':`${Number(t.recent_mastery).toFixed(0)}%`} · {movement(t.change)}</span></span><b>{signed(t.change)}</b></div>)}</div></>}
       </>}
     </section>
 
