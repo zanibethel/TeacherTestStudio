@@ -37,14 +37,26 @@ export async function createShareOffer(testId:string,fd:FormData){
   const focusedHints=fd.get('focused_retake_hints')==='on'
   const durationRaw=Math.max(1,Math.min(365,Number(fd.get('access_duration_days')||14)));const priceRaw=Number(fd.get('price_dollars')||0);if(paid&&priceRaw<=0)redirect(`/tests/${testId}?error=${encodeURIComponent('Enter a price for the paid practice pass.')}`)
   const audienceRaw=String(fd.get('audience_mode')||'link');const audienceMode=['link','students','groups'].includes(audienceRaw)?audienceRaw:'link';const rosterIds=fd.getAll('roster_ids').map(String);const groupIds=fd.getAll('group_ids').map(String)
-  if(audienceMode==='students'&&!rosterIds.length)redirect(`/tests/${testId}?error=${encodeURIComponent('Select at least one roster student for this share.')}`);if(audienceMode==='groups'&&!groupIds.length)redirect(`/tests/${testId}?error=${encodeURIComponent('Select at least one group for this share.')}`)
+  if(audienceMode==='students'&&!rosterIds.length)redirect(`/tests/${testId}?error=${encodeURIComponent('Select at least one roster student for this share.')}`);if(audienceMode==='groups'&&!groupIds.length)redirect(`/tests/${testId}?error=${encodeURIComponent('Select at least one class for this share.')}`)
   const expiresRaw=String(fd.get('link_expires_at')||'').trim();const guide=fd.get('study_guide_enabled')==='on'||paid;const focused=fd.get('focused_retake_enabled')==='on'||requireFocused||paid;const randomized=paid||unlimited||attemptsRaw>1
   const experienceName=String(fd.get('experience_name')||'Custom').trim().slice(0,80)||'Custom'
   const label=String(fd.get('label')||'').trim()||null
   const payload={test_id:testId,teacher_id:user.id,label,experience_name:experienceName,delivery_mode:deliveryMode,restricted_mode:baseMode==='restricted',access_mode:paid?'practice_pass':'classroom',payment_mode:paid?'paid':'free',max_attempts:paid?null:(unlimited?null:attemptsRaw),unlimited_attempts_until_due:unlimited,due_at:dueAt?dueAt.toISOString():null,require_focused_retake_before_full:requireFocused,focused_retake_percent:focusedPercent,focused_retake_min_score:focusedMinScore,focused_retake_hints:focusedHints,access_duration_days:paid?durationRaw:null,study_guide_enabled:guide,focused_retake_enabled:focused,randomized_retest_enabled:randomized,link_expires_at:expiresRaw?new Date(expiresRaw).toISOString():null,price_cents:paid?Math.round(priceRaw*100):null,audience_mode:audienceMode}
   const{data:share,error}=await supabase.from('test_shares').insert(payload).select('id,token').single();if(error||!share)redirect(`/tests/${testId}?error=${encodeURIComponent(error?.message||'Could not create share')}`)
-  if(audienceMode==='students'){const{data:owned}=await supabase.from('teacher_student_roster').select('id').eq('teacher_id',user.id).in('id',rosterIds);const rows=(owned??[]).map((r:any)=>({share_id:share.id,roster_id:r.id}));if(rows.length){const{error:e}=await supabase.from('test_share_roster_targets').insert(rows);if(e)redirect(`/tests/${testId}?error=${encodeURIComponent(e.message)}`)}}
-  if(audienceMode==='groups'){const{data:owned}=await supabase.from('teacher_groups').select('id').eq('teacher_id',user.id).in('id',groupIds);const rows=(owned??[]).map((g:any)=>({share_id:share.id,group_id:g.id}));if(rows.length){const{error:e}=await supabase.from('test_share_group_targets').insert(rows);if(e)redirect(`/tests/${testId}?error=${encodeURIComponent(e.message)}`)}}
+
+  const targetLabels:string[]=[]
+  let singleGroupId:string|null=null
+  if(audienceMode==='students'){
+    const{data:owned}=await supabase.from('teacher_student_roster').select('id,student_email,student_first_name,student_last_name').eq('teacher_id',user.id).in('id',rosterIds)
+    const rows=(owned??[]).map((r:any)=>({share_id:share.id,roster_id:r.id}));if(rows.length){const{error:e}=await supabase.from('test_share_roster_targets').insert(rows);if(e)redirect(`/tests/${testId}?error=${encodeURIComponent(e.message)}`)}
+    for(const r of owned??[]){const name=[(r as any).student_first_name,(r as any).student_last_name].filter(Boolean).join(' ').trim();targetLabels.push(name||String((r as any).student_email))}
+  }
+  if(audienceMode==='groups'){
+    const{data:owned}=await supabase.from('teacher_groups').select('id,name').eq('teacher_id',user.id).in('id',groupIds)
+    const rows=(owned??[]).map((g:any)=>({share_id:share.id,group_id:g.id}));if(rows.length){const{error:e}=await supabase.from('test_share_group_targets').insert(rows);if(e)redirect(`/tests/${testId}?error=${encodeURIComponent(e.message)}`)}
+    for(const g of owned??[])targetLabels.push(String((g as any).name))
+    if((owned??[]).length===1)singleGroupId=String((owned as any[])[0].id)
+  }
 
   const savePresetName=String(fd.get('save_preset_name')||'').trim().slice(0,80)
   if(savePresetName){
@@ -52,9 +64,11 @@ export async function createShareOffer(testId:string,fd:FormData){
     const{error:presetError}=await supabase.from('teacher_share_experience_presets').upsert({teacher_id:user.id,name:savePresetName,settings:presetSettings,updated_at:new Date().toISOString()},{onConflict:'teacher_id,name'})
     if(presetError)redirect(`/tests/${testId}?error=${encodeURIComponent(`Share created, but preset could not be saved: ${presetError.message}`)}`)
   }
-  revalidatePath(`/tests/${testId}`);revalidatePath('/reports')
+  revalidatePath(`/tests/${testId}`);revalidatePath('/reports');revalidatePath('/teacher-progress')
   const params=new URLSearchParams({created:share.id,token:share.token,audience:audienceMode})
   if(label)params.set('label',label)
+  if(targetLabels.length)params.set('targets',targetLabels.join(', '))
+  if(singleGroupId)params.set('group',singleGroupId)
   redirect(`/tests/${testId}?${params.toString()}#share-success`)
 }
 
