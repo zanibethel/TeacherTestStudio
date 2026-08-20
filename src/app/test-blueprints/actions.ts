@@ -37,7 +37,10 @@ export async function saveBlueprint(formData:FormData){
     const raw=JSON.parse(String(formData.get('chapter_filters')||'[]'))
     if(Array.isArray(raw))chapterFilters=raw.map((x:any)=>({chapter_number:Number.isInteger(x?.chapter_number)?x.chapter_number:null,chapter_title:String(x?.chapter_title||'').trim()}))
     const weights=JSON.parse(String(formData.get('subject_weights')||'{}'))
-    if(weights&&typeof weights==='object'&&!Array.isArray(weights))subjectWeights=Object.fromEntries(Object.entries(weights).map(([k,v])=>[k,Number(v)]).filter(([k,v])=>k.trim()&&Number.isFinite(v)&&v>0))
+    if(weights&&typeof weights==='object'&&!Array.isArray(weights)){
+      const pairs=Object.entries(weights).map(([k,v])=>[k,Number(v)] as const).filter(([k,v])=>k.trim()&&Number.isFinite(v)&&v>0)
+      subjectWeights=Object.fromEntries(pairs)
+    }
   }catch{redirect('/test-blueprints?error='+encodeURIComponent('Invalid blueprint configuration.'))}
   if(!name)redirect('/test-blueprints?error='+encodeURIComponent('Blueprint name is required.'))
   if(!Number.isInteger(questionCount)||questionCount<1||questionCount>200)redirect('/test-blueprints?error='+encodeURIComponent('Question count must be between 1 and 200.'))
