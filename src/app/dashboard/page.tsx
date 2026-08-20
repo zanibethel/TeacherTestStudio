@@ -9,19 +9,14 @@ export default async function Dashboard({searchParams}:{searchParams:Promise<{er
   const{data:profile}=await supabase.from('profiles').select('full_name,role,teacher_approved,teacher_can_invite').eq('id',user.id).single();const query=await searchParams
   if(profile?.role==='teacher'){
     if(!profile.teacher_approved)return <main className="narrow"><div className="row between"><h1>Teacher access pending</h1><form action="/auth/signout" method="post"><button className="ghost">Sign out</button></form></div><section className="card"><p>This account does not have approved teacher access.</p><p className="muted">Teacher tools are invite-only. Ask the approved teacher who invited you to send a valid one-time invitation link.</p></section></main>
-    const now=Date.now();const soon=now+48*60*60*1000
-    const[{data:tests},{count:bankCount},{count:pendingConnections},{count:connectedStudents},{count:groupCount},{data:activeShares}]=await Promise.all([
+    const[{data:tests},{count:bankCount},{count:connectedStudents},{count:groupCount},{data:activeShares}]=await Promise.all([
       supabase.from('tests').select('id,title,status,share_code,created_at,updated_at,randomize_questions,assessment_type,attempts(count)').order('updated_at',{ascending:false}),
       supabase.from('question_bank').select('*',{count:'exact',head:true}),
-      supabase.from('student_teacher_connection_requests').select('*',{count:'exact',head:true}).eq('teacher_id',user.id).eq('status','pending'),
       supabase.from('teacher_student_roster').select('*',{count:'exact',head:true}).eq('teacher_id',user.id).not('student_id','is',null),
       supabase.from('teacher_groups').select('*',{count:'exact',head:true}).eq('teacher_id',user.id),
       supabase.from('test_shares').select('id,label,due_at,created_at,test:tests(title)').eq('teacher_id',user.id).eq('active',true).order('created_at',{ascending:false})
     ])
     const classroomShares=(activeShares??[]).filter((s:any)=>s.due_at||s.label)
-    const dueSoon=classroomShares.filter((s:any)=>{if(!s.due_at)return false;const due=new Date(s.due_at).getTime();return due>now&&due<=soon})
-    const pastDue=classroomShares.filter((s:any)=>s.due_at&&new Date(s.due_at).getTime()<=now)
-    const attentionCount=(pendingConnections??0)+dueSoon.length+pastDue.length
     const totalAttempts=(tests??[]).reduce((sum:number,t:any)=>sum+Number(t.attempts?.[0]?.count??0),0)
     const gettingStarted=[
       {done:(connectedStudents??0)>0,label:'Add or approve a student',detail:(connectedStudents??0)>0?`${connectedStudents} connected`:'Build your classroom roster',href:'/teacher-roster'},
@@ -39,16 +34,6 @@ export default async function Dashboard({searchParams}:{searchParams:Promise<{er
         <div className="row between" style={{alignItems:'center'}}><div><h2 style={{margin:0}}>Set up your classroom</h2></div><span className="pill">{setupDone}/5</span></div>
         <div style={{display:'grid',gap:8,marginTop:12}}>{gettingStarted.map((step,index)=><Link key={step.label} href={step.href} style={{display:'grid',gridTemplateColumns:'30px minmax(0,1fr) auto',alignItems:'center',gap:10,padding:'10px 12px',border:'1px solid #e4e7ef',borderRadius:12,background:step.done?'#f0fdf4':'#fff',color:'#172033'}}><span aria-hidden style={{width:26,height:26,borderRadius:999,display:'grid',placeItems:'center',fontWeight:850,background:step.done?'#dcfce7':'#eef2ff',color:step.done?'#047857':'#4338ca'}}>{step.done?'✓':index+1}</span><span style={{minWidth:0}}><b style={{display:'block'}}>{step.label}</b><small className="muted">{step.detail}</small></span><span aria-hidden style={{color:'#4338ca',fontWeight:800}}>→</span></Link>)}</div>
       </section>}
-
-      <section className="card" style={{padding:16}}>
-        <div className="row between" style={{alignItems:'center',gap:10}}><h2 style={{margin:0}}>Classroom attention</h2><span className="pill" style={{background:attentionCount?'#fff7ed':'#ecfdf5',color:attentionCount?'#c2410c':'#047857',whiteSpace:'nowrap'}}>{attentionCount?`${attentionCount} item${attentionCount===1?'':'s'}`:'All clear'}</span></div>
-        <div className="dashboard-tool-grid" style={{marginTop:12}}>
-          <Link className="dashboard-tool" href="/teacher-roster"><b>Student requests</b><span>{pendingConnections??0} waiting</span></Link>
-          <Link className="dashboard-tool" href="/teacher-progress"><b>Due soon</b><span>{dueSoon.length} due in 48 hours</span></Link>
-          <Link className="dashboard-tool" href="/teacher-progress"><b>Past due</b><span>{pastDue.length} past due</span></Link>
-          <Link className="dashboard-tool" href="/reports"><b>Active assignments</b><span>{classroomShares.length} active</span></Link>
-        </div>
-      </section>
 
       <section className="card dashboard-actions" style={{padding:16}}>
         <div className="dashboard-primary-actions" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}><Link className="button dashboard-create" href="/tests/new">Build a test</Link><Link className="secondary button dashboard-create" href="/assignments/new">Create assignment</Link></div>
