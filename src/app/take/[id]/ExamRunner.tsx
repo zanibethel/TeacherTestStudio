@@ -62,8 +62,19 @@ export default function ExamRunner(props:Props){
   },[strictMode,started])
 
   async function beginStrict(){try{await document.documentElement.requestFullscreen()}catch{}setStarted(true)}
-  function choose(questionId:string,choiceId:string){const next={...answers,[questionId]:choiceId};setAnswers(next);if(allowSaveResume)startTransition(()=>{void saveAction(next)})}
-  function submit(){submitted.current=true;suppressFullscreen.current=true;if(document.fullscreenElement)void document.exitFullscreen()}
+  function choose(questionId:string,choiceId:string){const next={...answers,[questionId]:choiceId};setAnswers(next);setNotice('');if(allowSaveResume)startTransition(()=>{void saveAction(next)})}
+  function submit(event:React.FormEvent<HTMLFormElement>){
+    const auto=event.currentTarget.elements.namedItem('auto_submit') as HTMLInputElement|null
+    const isAuto=auto?.value==='1'
+    if(!isAuto&&answeredCount<questions.length){
+      event.preventDefault();submitted.current=false
+      const firstUnanswered=unanswered[0]
+      if(firstUnanswered!==undefined)setCurrent(firstUnanswered)
+      setNotice(`Answer all ${questions.length} questions before submitting. ${questions.length-answeredCount} remaining.`)
+      return
+    }
+    submitted.current=true;suppressFullscreen.current=true;if(document.fullscreenElement)void document.exitFullscreen()
+  }
   function previous(){setCurrent(i=>Math.max(0,i-1))}
   function next(){
     if(current<questions.length-1){setCurrent(i=>i+1);return}
@@ -102,10 +113,10 @@ export default function ExamRunner(props:Props){
         </section>
         <div className="exam-mobile-dock">
           <div className="question-dots" aria-label="Question navigation">{questions.map((q,i)=><button ref={el=>{dotRefs.current[i]=el}} type="button" key={q.id} className={`question-dot ${i===current?'current':''} ${answers[q.id]?'answered':''}`} onClick={()=>setCurrent(i)} aria-label={`Question ${i+1}${answers[q.id]?', answered':', unanswered'}`}>{i+1}</button>)}</div>
-          <div className="exam-nav-buttons"><button className="secondary" type="button" onClick={previous} disabled={current===0}>Previous</button>{atEnd&&!hasOtherUnanswered?<button type="submit">Submit exam</button>:<button type="button" onClick={next}>{atEnd&&hasOtherUnanswered?'Next unanswered':'Next'}</button>}</div>
-          {!canSubmit&&atEnd&&!hasOtherUnanswered&&<span className="exam-unanswered-note">Review unanswered questions before submitting.</span>}
+          <div className="exam-nav-buttons"><button className="secondary" type="button" onClick={previous} disabled={current===0}>Previous</button>{canSubmit?<button type="submit">Submit exam</button>:atEnd&&hasOtherUnanswered?<button type="button" onClick={next}>Next unanswered</button>:atEnd?<button type="button" disabled>Answer to finish</button>:<button type="button" onClick={next}>Next</button>}</div>
+          {!canSubmit&&<span className="exam-unanswered-note">{questions.length-answeredCount} question{questions.length-answeredCount===1?'':'s'} remaining before submit.</span>}
         </div>
-      </>:<>{questions.map((q,index)=><section className="card exam-question" key={q.id}><p className="question-progress">Question {index+1} of {questions.length}</p><h2>{q.prompt}</h2>{q.choices.map(c=><label className={`answer ${answers[q.id]===c.id?'answer-selected':''}`} key={c.id}><input type="radio" name={`visible_${q.id}`} checked={answers[q.id]===c.id} onChange={()=>choose(q.id,c.id)}/><span>{c.label}</span></label>)}</section>)}<button type="submit">Submit exam</button></>}
+      </>:<>{questions.map((q,index)=><section className="card exam-question" key={q.id}><p className="question-progress">Question {index+1} of {questions.length}</p><h2>{q.prompt}</h2>{q.choices.map(c=><label className={`answer ${answers[q.id]===c.id?'answer-selected':''}`} key={c.id}><input type="radio" name={`visible_${q.id}`} checked={answers[q.id]===c.id} onChange={()=>choose(q.id,c.id)}/><span>{c.label}</span></label>)}</section>)}<button type="submit" disabled={!canSubmit}>Submit exam</button>{!canSubmit&&<p className="exam-unanswered-note">Answer all questions before submitting.</p>}</>}
     </form>
   </main>
 }
