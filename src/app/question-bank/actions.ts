@@ -3,68 +3,52 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
+type ChapterTag={number:number|null;title:string}
 function normalize(value:string){return value.trim().toLowerCase().replace(/\s+/g,' ')}
+function cleanChapters(value:unknown):ChapterTag[]{const items=Array.isArray(value)?value:[];const seen=new Set<string>();const out:ChapterTag[]=[];for(const item of items){if(!item||typeof item!=='object')continue;const rawNumber=(item as any).number;const number=rawNumber===null||rawNumber===''?null:Number(rawNumber);const title=String((item as any).title||'').trim();if(number!==null&&(!Number.isInteger(number)||number<1))continue;if(number===null&&!title)continue;const key=`${number??''}|${title.toLowerCase()}`;if(!seen.has(key)){seen.add(key);out.push({number,title})}}return out}
+function cleanSubjects(value:unknown){const seen=new Set<string>();return(Array.isArray(value)?value:[]).map(x=>String(x).trim()).filter(x=>{const key=x.toLowerCase();if(!x||seen.has(key))return false;seen.add(key);return true})}
+function parseJson(value:FormDataEntryValue|null){try{return JSON.parse(String(value||'[]'))}catch{return[]}}
 function questionFromForm(fd:FormData){
-  const prompt=String(fd.get('prompt')||'').trim()
-  const subjectCategory=String(fd.get('subject_category')||'').trim()
-  const chapterNumberRaw=String(fd.get('chapter_number')||'').trim()
-  const chapterNumber=chapterNumberRaw?Number(chapterNumberRaw):null
-  const chapterTitle=String(fd.get('chapter_title')||'').trim()
-  const explanation=String(fd.get('explanation')||'').trim()
-  const focusedHint=String(fd.get('focused_retake_hint')||'').trim()
-  const choices=fd.getAll('choices').map(x=>String(x).trim()).filter(Boolean)
-  const correctIndex=Number(fd.get('correct_index')||0)
-  return{prompt,subjectCategory,chapterNumber,chapterTitle,explanation,focusedHint,choices,correctIndex}
+  const prompt=String(fd.get('prompt')||'').trim(),chapterNumberRaw=String(fd.get('chapter_number')||'').trim(),chapterTitle=String(fd.get('chapter_title')||'').trim(),subjectCategory=String(fd.get('subject_category')||'').trim()
+  let chapters=cleanChapters(parseJson(fd.get('chapters_json'))),subjects=cleanSubjects(parseJson(fd.get('subjects_json')))
+  if(!chapters.length&&(chapterNumberRaw||chapterTitle)){const number=chapterNumberRaw?Number(chapterNumberRaw):null;chapters=cleanChapters([{number,title:chapterTitle}])}
+  if(!subjects.length&&subjectCategory)subjects=[subjectCategory]
+  const explanation=String(fd.get('explanation')||'').trim(),focusedHint=String(fd.get('focused_retake_hint')||'').trim(),choices=fd.getAll('choices').map(x=>String(x).trim()).filter(Boolean),correctIndex=Number(fd.get('correct_index')||0)
+  return{prompt,chapters,subjects,explanation,focusedHint,choices,correctIndex}
 }
-function validationError(q:ReturnType<typeof questionFromForm>){
-  if(!q.prompt||q.choices.length<2||q.correctIndex<0||q.correctIndex>=q.choices.length)return'Enter a question, at least two choices, and a valid correct answer.'
-  if(q.chapterNumber!==null&&(!Number.isInteger(q.chapterNumber)||q.chapterNumber<1))return'Chapter number must be a positive whole number.'
-  return''
+function validationError(q:ReturnType<typeof questionFromForm>){if(!q.prompt||q.choices.length<2||q.correctIndex<0||q.correctIndex>=q.choices.length)return'Enter a question, at least two choices, and a valid correct answer.';return''}
+function sameAnswers(existing:any,q:ReturnType<typeof questionFromForm>){const choices=Array.isArray(existing?.choices)?existing.choices.map((x:any)=>String(x).trim()):[];return existing?.correct_index===q.correctIndex&&choices.length===q.choices.length&&choices.every((x:string,i:number)=>x===q.choices[i])}
+async function readTags(supabase:any,questionId:string){const[{data:chapters},{data:subjects}]=await Promise.all([supabase.from('question_bank_chapters').select('chapter_number,chapter_title').eq('question_id',questionId),supabase.from('question_bank_subjects').select('subject_category').eq('question_id',questionId)]);return{chapters:cleanChapters((chapters??[]).map((x:any)=>({number:x.chapter_number,title:x.chapter_title??''}))),subjects:cleanSubjects((subjects??[]).map((x:any)=>x.subject_category))}}
+async function writeTags(supabase:any,questionId:string,teacherId:string,chapters:ChapterTag[],subjects:string[],replace:boolean){
+  const current=replace?{chapters:[] as ChapterTag[],subjects:[] as string[]}:await readTags(supabase,questionId),allChapters=cleanChapters([...current.chapters,...chapters]),allSubjects=cleanSubjects([...current.subjects,...subjects])
+  if(replace){await Promise.all([supabase.from('question_bank_chapters').delete().eq('question_id',questionId).eq('teacher_id',teacherId),supabase.from('question_bank_subjects').delete().eq('question_id',questionId).eq('teacher_id',teacherId)])}
+  const now=replace?{chapters:[] as ChapterTag[],subjects:[] as string[]}:current,chapterKeys=new Set(now.chapters.map(x=>`${x.number??''}|${x.title.toLowerCase()}`)),subjectKeys=new Set(now.subjects.map(x=>x.toLowerCase()))
+  const chapterRows=allChapters.filter(x=>!chapterKeys.has(`${x.number??''}|${x.title.toLowerCase()}`)).map(x=>({question_id:questionId,teacher_id:teacherId,chapter_number:x.number,chapter_title:x.title||null})),subjectRows=allSubjects.filter(x=>!subjectKeys.has(x.toLowerCase())).map(subject=>({question_id:questionId,teacher_id:teacherId,subject_category:subject}))
+  if(chapterRows.length){const{error}=await supabase.from('question_bank_chapters').insert(chapterRows);if(error)throw error}if(subjectRows.length){const{error}=await supabase.from('question_bank_subjects').insert(subjectRows);if(error)throw error}
+  const firstChapter=allChapters[0],firstSubject=allSubjects[0]||null;const{error}=await supabase.from('question_bank').update({chapter_number:firstChapter?.number??null,chapter_title:firstChapter?.title||null,subject_category:firstSubject,content_area:firstSubject,updated_at:new Date().toISOString()}).eq('id',questionId).eq('teacher_id',teacherId);if(error)throw error
 }
+async function appendPrimaryTags(supabase:any,teacherId:string){const{data:rows,error}=await supabase.from('question_bank').select('id,chapter_number,chapter_title,subject_category,content_area').eq('teacher_id',teacherId).limit(5000);if(error)throw error;for(const row of rows??[]){const chapters=cleanChapters([{number:(row as any).chapter_number??null,title:(row as any).chapter_title??''}]),subjects=cleanSubjects([String((row as any).subject_category||(row as any).content_area||'')]);if(chapters.length||subjects.length)await writeTags(supabase,(row as any).id,teacherId,chapters,subjects,false)}}
 
 export async function createBankQuestion(fd:FormData){
-  const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
-  const{data:profile}=await supabase.from('profiles').select('role,teacher_approved').eq('id',user.id).single();if(profile?.role!=='teacher'||!profile.teacher_approved)redirect('/dashboard')
-  const q=questionFromForm(fd),invalid=validationError(q);if(invalid)redirect('/question-bank/new?error='+encodeURIComponent(invalid))
-  const{error}=await supabase.from('question_bank').insert({teacher_id:user.id,prompt:q.prompt,normalized_prompt:normalize(q.prompt),choices:q.choices,correct_index:q.correctIndex,content_area:q.subjectCategory||null,subject_category:q.subjectCategory||null,chapter_number:q.chapterNumber,chapter_title:q.chapterTitle||null,explanation:q.explanation||null,focused_retake_hint:q.focusedHint||null,source_type:'teacher'})
-  if(error){const message=error.code==='23505'?'That question already exists in your bank.':error.message;redirect('/question-bank/new?error='+encodeURIComponent(message))}
-  revalidatePath('/question-bank');revalidatePath('/tests/new');redirect('/question-bank?added=1')
+  const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login');const{data:profile}=await supabase.from('profiles').select('role,teacher_approved').eq('id',user.id).single();if(profile?.role!=='teacher'||!profile.teacher_approved)redirect('/dashboard')
+  const q=questionFromForm(fd),invalid=validationError(q);if(invalid)redirect('/question-bank/new?error='+encodeURIComponent(invalid));const normalized=normalize(q.prompt),{data:existing}=await supabase.from('question_bank').select('id,choices,correct_index').eq('teacher_id',user.id).eq('normalized_prompt',normalized).maybeSingle()
+  if(existing){if(!sameAnswers(existing,q))redirect('/question-bank/new?error='+encodeURIComponent('This question wording already exists, but its answer choices or correct answer are different. Edit the existing question instead of creating a conflicting duplicate.'));try{await writeTags(supabase,existing.id,user.id,q.chapters,q.subjects,false)}catch(error:any){redirect('/question-bank/new?error='+encodeURIComponent(error.message))}revalidatePath('/question-bank');revalidatePath('/tests/new');redirect('/question-bank?merged=1')}
+  const firstChapter=q.chapters[0],firstSubject=q.subjects[0]||null;const{data:created,error}=await supabase.from('question_bank').insert({teacher_id:user.id,prompt:q.prompt,normalized_prompt:normalized,choices:q.choices,correct_index:q.correctIndex,content_area:firstSubject,subject_category:firstSubject,chapter_number:firstChapter?.number??null,chapter_title:firstChapter?.title||null,explanation:q.explanation||null,focused_retake_hint:q.focusedHint||null,source_type:'teacher'}).select('id').single();if(error||!created)redirect('/question-bank/new?error='+encodeURIComponent(error?.message||'Unable to save question.'))
+  try{await writeTags(supabase,created.id,user.id,q.chapters,q.subjects,true)}catch(error:any){redirect('/question-bank/new?error='+encodeURIComponent(error.message))}revalidatePath('/question-bank');revalidatePath('/tests/new');redirect('/question-bank?added=1')
 }
 
-export async function deleteBankQuestion(id:string){
-  const supabase=await createClient()
-  const{error}=await supabase.from('question_bank').delete().eq('id',id)
-  if(error)redirect('/question-bank?error='+encodeURIComponent(error.message))
-  revalidatePath('/question-bank');revalidatePath('/tests/new')
-}
-
-export async function refreshSharedBankQuestions(){
-  const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
-  const{data,error}=await supabase.rpc('refresh_my_shared_bank_questions')
-  if(error)redirect('/question-bank?error='+encodeURIComponent(error.message))
-  revalidatePath('/question-bank');revalidatePath('/tests/new')
-  redirect('/question-bank?refreshed='+encodeURIComponent(String(data??0)))
-}
+export async function deleteBankQuestion(id:string){const supabase=await createClient();const{error}=await supabase.from('question_bank').delete().eq('id',id);if(error)redirect('/question-bank?error='+encodeURIComponent(error.message));revalidatePath('/question-bank');revalidatePath('/tests/new')}
+export async function refreshSharedBankQuestions(){const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login');const{data,error}=await supabase.rpc('refresh_my_shared_bank_questions');if(error)redirect('/question-bank?error='+encodeURIComponent(error.message));try{await appendPrimaryTags(supabase,user.id)}catch(syncError:any){redirect('/question-bank?error='+encodeURIComponent(`Shared questions refreshed, but classifications could not be synchronized: ${syncError.message}`))}revalidatePath('/question-bank');revalidatePath('/tests/new');redirect('/question-bank?refreshed='+encodeURIComponent(String(data??0)))}
 
 export async function bulkUpdateBankQuestionMetadata(fd:FormData){
-  const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
-  const ids=[...new Set(fd.getAll('question_ids').map(x=>String(x).trim()).filter(Boolean))]
-  if(!ids.length)redirect('/question-bank?error='+encodeURIComponent('Select at least one question.'))
-  if(ids.length>1000)redirect('/question-bank?error='+encodeURIComponent('You can update up to 1000 questions at once.'))
-  const chapterNumberRaw=String(fd.get('chapter_number')||'').trim(),chapterTitle=String(fd.get('chapter_title')||'').trim(),subjectCategory=String(fd.get('subject_category')||'').trim(),patch:Record<string,unknown>={updated_at:new Date().toISOString()}
-  if(chapterNumberRaw){const chapterNumber=Number(chapterNumberRaw);if(!Number.isInteger(chapterNumber)||chapterNumber<1)redirect('/question-bank?error='+encodeURIComponent('Chapter number must be a positive whole number.'));patch.chapter_number=chapterNumber}
-  if(chapterTitle)patch.chapter_title=chapterTitle
-  if(subjectCategory){patch.subject_category=subjectCategory;patch.content_area=subjectCategory}
-  if(Object.keys(patch).length===1)redirect('/question-bank?error='+encodeURIComponent('Enter at least one chapter or subject value to apply.'))
-  const{data,error}=await supabase.from('question_bank').update(patch).eq('teacher_id',user.id).in('id',ids).select('id')
-  if(error)redirect('/question-bank?error='+encodeURIComponent(error.message))
-  revalidatePath('/question-bank');revalidatePath('/tests/new');redirect('/question-bank?bulkUpdated='+encodeURIComponent(String(data?.length??0)))
+  const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login');const ids=[...new Set(fd.getAll('question_ids').map(x=>String(x).trim()).filter(Boolean))];if(!ids.length)redirect('/question-bank?error='+encodeURIComponent('Select at least one question.'));if(ids.length>1000)redirect('/question-bank?error='+encodeURIComponent('You can update up to 1000 questions at once.'))
+  const chapterNumberRaw=String(fd.get('chapter_number')||'').trim(),chapterTitle=String(fd.get('chapter_title')||'').trim(),subject=String(fd.get('subject_category')||'').trim();const chapters=cleanChapters(chapterNumberRaw||chapterTitle?[{number:chapterNumberRaw?Number(chapterNumberRaw):null,title:chapterTitle}]:[]),subjects=cleanSubjects(subject?[subject]:[]);if(!chapters.length&&!subjects.length)redirect('/question-bank?error='+encodeURIComponent('Enter at least one chapter or subject tag to add.'))
+  for(const id of ids){try{await writeTags(supabase,id,user.id,chapters,subjects,false)}catch(error:any){redirect('/question-bank?error='+encodeURIComponent(error.message))}}
+  revalidatePath('/question-bank');revalidatePath('/tests/new');redirect('/question-bank?bulkUpdated='+encodeURIComponent(String(ids.length)))
 }
 
 export async function updateBankQuestion(id:string,fd:FormData){
-  const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
-  const q=questionFromForm(fd),invalid=validationError(q);if(invalid)redirect(`/question-bank/${id}/edit?error=`+encodeURIComponent(invalid))
-  const{error}=await supabase.from('question_bank').update({prompt:q.prompt,normalized_prompt:normalize(q.prompt),choices:q.choices,correct_index:q.correctIndex,content_area:q.subjectCategory||null,subject_category:q.subjectCategory||null,chapter_number:q.chapterNumber,chapter_title:q.chapterTitle||null,explanation:q.explanation||null,focused_retake_hint:q.focusedHint||null,updated_at:new Date().toISOString()}).eq('id',id).eq('teacher_id',user.id)
-  if(error)redirect(`/question-bank/${id}/edit?error=`+encodeURIComponent(error.code==='23505'?'That question already exists in your bank.':error.message))
-  revalidatePath('/question-bank');revalidatePath('/tests/new');redirect('/question-bank')
+  const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login');const q=questionFromForm(fd),invalid=validationError(q);if(invalid)redirect(`/question-bank/${id}/edit?error=`+encodeURIComponent(invalid));const normalized=normalize(q.prompt),{data:collision}=await supabase.from('question_bank').select('id,choices,correct_index').eq('teacher_id',user.id).eq('normalized_prompt',normalized).neq('id',id).maybeSingle()
+  if(collision){if(!sameAnswers(collision,q))redirect(`/question-bank/${id}/edit?error=`+encodeURIComponent('Another question has the same wording but a different answer key. Resolve the answer difference before combining them.'));const current=await readTags(supabase,id);try{await writeTags(supabase,collision.id,user.id,[...current.chapters,...q.chapters],[...current.subjects,...q.subjects],false);await supabase.from('question_bank').delete().eq('id',id).eq('teacher_id',user.id)}catch(error:any){redirect(`/question-bank/${id}/edit?error=`+encodeURIComponent(error.message))}revalidatePath('/question-bank');revalidatePath('/tests/new');redirect('/question-bank?merged=1')}
+  const firstChapter=q.chapters[0],firstSubject=q.subjects[0]||null;const{error}=await supabase.from('question_bank').update({prompt:q.prompt,normalized_prompt:normalized,choices:q.choices,correct_index:q.correctIndex,content_area:firstSubject,subject_category:firstSubject,chapter_number:firstChapter?.number??null,chapter_title:firstChapter?.title||null,explanation:q.explanation||null,focused_retake_hint:q.focusedHint||null,updated_at:new Date().toISOString()}).eq('id',id).eq('teacher_id',user.id);if(error)redirect(`/question-bank/${id}/edit?error=`+encodeURIComponent(error.message));try{await writeTags(supabase,id,user.id,q.chapters,q.subjects,true)}catch(error:any){redirect(`/question-bank/${id}/edit?error=`+encodeURIComponent(error.message))}revalidatePath('/question-bank');revalidatePath('/tests/new');redirect('/question-bank')
 }
