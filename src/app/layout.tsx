@@ -3,6 +3,7 @@ import './nav.css'
 import './footer.css'
 import './mobile-selection.css'
 import './mobile-polish.css'
+import './cta-fixes.css'
 import AppHeader from '@/components/AppHeader'
 import SiteFooter from '@/components/SiteFooter'
 
