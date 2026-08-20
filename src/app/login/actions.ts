@@ -8,6 +8,10 @@ function safeNext(value:FormDataEntryValue|null){
   const next=String(value??'').trim()
   return next.startsWith('/')&&!next.startsWith('//')?next:'/dashboard'
 }
+function invitedTeacherUrl(invite:string,email:string,message:string,key:'error'|'message'='error'){
+  const q=new URLSearchParams({role:'teacher',invite,email,[key]:message})
+  return '/login?'+q.toString()
+}
 
 export async function login(fd: FormData) {
   const s = await createClient()
@@ -21,7 +25,7 @@ export async function login(fd: FormData) {
 
 export async function signup(fd: FormData) {
   const s = await createClient()
-  const email = String(fd.get('email')).trim()
+  const email = String(fd.get('email')).trim().toLowerCase()
   const password = String(fd.get('password'))
   const full_name = String(fd.get('full_name')||'').trim()
   const requested_role = fd.get('role') === 'teacher' ? 'teacher' : 'student'
@@ -29,7 +33,11 @@ export async function signup(fd: FormData) {
   const requested_teacher_id = String(fd.get('requested_teacher_id') ?? '').trim()
   const next=safeNext(fd.get('next'))
   if (!full_name) redirect((requested_role==='student'?'/signup/student':'/login')+'?error='+encodeURIComponent('Enter your name.'))
-  if (requested_role === 'teacher' && !teacher_invite) redirect('/login?error=' + encodeURIComponent('Teacher accounts require a private invite from an approved teacher.'))
+  if (requested_role === 'teacher'){
+    if(!teacher_invite)redirect('/login?error=' + encodeURIComponent('Teacher accounts require a private invite from an approved teacher.'))
+    const{data:inviteMatches,error:inviteError}=await s.rpc('teacher_invite_matches',{p_code:teacher_invite,p_email:email})
+    if(inviteError||!inviteMatches)redirect(invitedTeacherUrl(teacher_invite,email,'This teacher invite is expired, already used, or was created for a different email address.'))
+  }
   const { data, error } = await s.auth.signUp({
     email,
     password,
@@ -39,10 +47,13 @@ export async function signup(fd: FormData) {
     },
   })
   if (error){
-    const base=requested_role==='student'?'/signup/student':'/login'
-    redirect(base+'?error='+encodeURIComponent(error.message)+(next!=='/dashboard'?'&next='+encodeURIComponent(next):''))
+    if(requested_role==='teacher')redirect(invitedTeacherUrl(teacher_invite,email,error.message))
+    redirect('/signup/student?error='+encodeURIComponent(error.message)+(next!=='/dashboard'?'&next='+encodeURIComponent(next):''))
   }
-  if (!data.session) redirect('/login?message=' + encodeURIComponent(requested_teacher_id?'Check your email to confirm your account. Your teacher connection request will be waiting for approval.':'Check your email to confirm your account, then sign in.') + (next!=='/dashboard'?'&next='+encodeURIComponent(next):''))
+  if (!data.session){
+    if(requested_role==='teacher')redirect(invitedTeacherUrl(teacher_invite,email,'Check your email to confirm your account, then sign in.','message'))
+    redirect('/login?message=' + encodeURIComponent(requested_teacher_id?'Check your email to confirm your account. Your teacher connection request will be waiting for approval.':'Check your email to confirm your account, then sign in.') + (next!=='/dashboard'?'&next='+encodeURIComponent(next):''))
+  }
   redirect(next)
 }
 
