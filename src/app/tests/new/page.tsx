@@ -2,20 +2,24 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import ClassroomTestBuilder from './ClassroomTestBuilder'
-import { createTest } from './actions'
+import { createTest, saveSubjectMixPreset } from './actions'
 
 function normalizeQuestion(value:string){return value.toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim()}
+
+type BundlePreset={preset_id:string;preset_title:string;bundle_id:string;bundle_title:string;question_count:number;collection_ids:string[];weights:Record<string,number>;subject_mappings:Record<string,string>}
 
 export default async function NewTest({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (profile?.role !== 'teacher') redirect('/dashboard')
+  const { data: profile } = await supabase.from('profiles').select('role,teacher_approved').eq('id', user.id).single()
+  if (profile?.role !== 'teacher' || !profile.teacher_approved) redirect('/dashboard')
 
-  const [{ data: bankRaw }, { data: previousRaw }] = await Promise.all([
-    supabase.from('question_bank').select('id,prompt,choices,correct_index,content_area,subject_category,chapter_number,chapter_title,source_type,focused_retake_hint,imported_collection_id').order('updated_at',{ascending:false}).limit(1000),
+  const [{ data: bankRaw }, { data: previousRaw }, { data: mixPresets }, { data: bundlePresetData }] = await Promise.all([
+    supabase.from('question_bank').select('id,prompt,choices,correct_index,content_area,subject_category,chapter_number,chapter_title,source_type,focused_retake_hint,imported_collection_id').eq('teacher_id',user.id).order('updated_at',{ascending:false}).limit(2000),
     supabase.from('tests').select('id,title,updated_at,assessment_type,chapter_label,questions(id,prompt,position,content_area,subject_category,chapter_number,chapter_title,focused_retake_hint,choices(id,label,position),question_answers(choice_id))').eq('teacher_id',user.id).order('updated_at',{ascending:false}).limit(50),
+    supabase.from('teacher_subject_mix_presets').select('id,name,subject_weights').eq('teacher_id',user.id).order('updated_at',{ascending:false}),
+    supabase.rpc('get_teacher_builder_bundle_presets'),
   ])
 
   const collectionIds=[...new Set((bankRaw??[]).map((q:any)=>q.imported_collection_id).filter(Boolean))]
@@ -23,12 +27,25 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
     ? await supabase.from('shared_collections').select('id,title').in('id',collectionIds)
     : { data: [] as any[] }
   const collectionTitle=new Map((collections??[]).map((c:any)=>[c.id,c.title]))
+  const bundlePresets=(Array.isArray(bundlePresetData)?bundlePresetData:[]) as BundlePreset[]
+  const collectionBundle=new Map<string,{bundle_id:string;bundle_title:string}>()
+  for(const preset of bundlePresets){for(const collectionId of preset.collection_ids??[]){if(!collectionBundle.has(collectionId))collectionBundle.set(collectionId,{bundle_id:preset.bundle_id,bundle_title:preset.bundle_title})}}
 
-  const bank=(bankRaw??[]).map((q:any)=>({
-    ...q,
-    subject_category:q.subject_category??q.content_area,
-    bundle_title:q.imported_collection_id?collectionTitle.get(q.imported_collection_id)||'Imported resource':'My custom questions',
-  }))
+  const bank=(bankRaw??[]).map((q:any)=>{
+    const bundle=q.imported_collection_id?collectionBundle.get(q.imported_collection_id):undefined
+    const sourceKey=!q.imported_collection_id?'custom':bundle?`bundle:${bundle.bundle_id}`:`collection:${q.imported_collection_id}`
+    const sourceTitle=!q.imported_collection_id?'My custom questions':bundle?.bundle_title||collectionTitle.get(q.imported_collection_id)||'Imported resource'
+    return {...q,subject_category:q.subject_category??q.content_area,bundle_title:sourceTitle,source_bucket_key:sourceKey,source_bucket_title:sourceTitle}
+  })
+  const sourceMap=new Map<string,{key:string;title:string;kind:'custom'|'bundle'|'collection';bundleId:string|null;collectionIds:Set<string>;questionCount:number}>()
+  for(const q of bank as any[]){
+    const key=q.source_bucket_key
+    const current=sourceMap.get(key)??{key,title:q.source_bucket_title,kind:key==='custom'?'custom':key.startsWith('bundle:')?'bundle':'collection',bundleId:key.startsWith('bundle:')?key.slice(7):null,collectionIds:new Set<string>(),questionCount:0}
+    current.questionCount++
+    if(q.imported_collection_id)current.collectionIds.add(q.imported_collection_id)
+    sourceMap.set(key,current)
+  }
+  const sourceBuckets=[...sourceMap.values()].map(x=>({...x,collectionIds:[...x.collectionIds]})).sort((a,b)=>a.title.localeCompare(b.title))
   const bankByPrompt=new Map(bank.map((q:any)=>[normalizeQuestion(q.prompt),q]))
 
   const previousTests=(previousRaw??[]).map((test:any)=>({
@@ -43,5 +60,5 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
   })).filter((t:any)=>t.questions.length)
 
   const query = await searchParams
-  return <main><Link href="/dashboard">← Dashboard</Link><div className="row between"><div><h1>Create a test</h1><p className="muted">Build by chapter, subject mix, saved questions, previous tests, an import, or new content.</p></div><div className="row" style={{flexWrap:'wrap'}}><Link className="secondary button" href="/test-blueprints">Smart blueprints</Link><Link className="secondary button" href="/question-bank">Question bank</Link></div></div>{query.error && <p className="bad">{query.error}</p>}<ClassroomTestBuilder action={createTest} bankQuestions={bank as any} previousTests={previousTests as any} /></main>
+  return <main><Link href="/dashboard">← Dashboard</Link><div className="row between"><div><h1>Create a test</h1><p className="muted">Choose source banks, chapters, source percentages, and subject weighting — then let CramLoop assemble the pool.</p></div><div className="row" style={{flexWrap:'wrap'}}><Link className="secondary button" href="/test-blueprints">Smart blueprints</Link><Link className="secondary button" href="/question-bank">Question bank</Link></div></div>{query.error && <p className="bad">{query.error}</p>}<ClassroomTestBuilder action={createTest} saveMixPresetAction={saveSubjectMixPreset} bankQuestions={bank as any} previousTests={previousTests as any} sourceBuckets={sourceBuckets as any} bundlePresets={bundlePresets as any} initialMixPresets={(mixPresets??[]) as any} /></main>
 }
