@@ -11,8 +11,10 @@ export default function AppMenu({role,canInvite,isAdmin}:{role:string|null;canIn
     <summary aria-label="Open navigation menu"><span className="hamburger" aria-hidden="true">☰</span><span className="menu-label">Menu</span></summary>
     <nav className="menu-panel" aria-label="Main navigation" onClick={e=>{if((e.target as HTMLElement).closest('a'))closeMenu()}}>
       {role==='teacher'?<>
-        <Link href="/dashboard">My Tests</Link>
-        <Link href="/tests/new">+ Create Test</Link>
+        <Link href="/dashboard">Dashboard</Link>
+        <Link href="/notifications">Notifications</Link>
+        <Link href="/tests/new">Build a test</Link>
+        <Link href="/assignments/new">Create assignment</Link>
         <Link href="/reports">Reports</Link>
         <Link href="/teacher-roster">Students / Roster</Link>
         <Link href="/teacher-groups">Groups</Link>
