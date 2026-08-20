@@ -22,6 +22,15 @@ export async function startBundlePractice(bundleId:string,collectionId:string,fd
   redirect(`/practice/${data}`)
 }
 
+export async function startBundleExamPreset(bundleId:string,presetId:string){
+  const supabase=await createClient()
+  const{data:{user}}=await supabase.auth.getUser()
+  if(!user)redirect('/login')
+  const{data,error}=await supabase.rpc('create_bundle_exam_preset_session',{p_bundle_id:bundleId,p_preset_id:presetId})
+  if(error)redirect(`/practice-library/bundles/${bundleId}?error=${encodeURIComponent(error.message)}`)
+  redirect(`/practice/${data}`)
+}
+
 export async function submitBundleReview(bundleId:string,fd:FormData){
   const supabase=await createClient()
   const{data:{user}}=await supabase.auth.getUser()
