@@ -43,5 +43,5 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
   })).filter((t:any)=>t.questions.length)
 
   const query = await searchParams
-  return <main><Link href="/dashboard">← Dashboard</Link><div className="row between"><div><h1>Create a test</h1><p className="muted">Build by chapter, subject mix, saved questions, previous tests, an import, or new content.</p></div><Link className="secondary button" href="/question-bank">Question bank</Link></div>{query.error && <p className="bad">{query.error}</p>}<ClassroomTestBuilder action={createTest} bankQuestions={bank as any} previousTests={previousTests as any} /></main>
+  return <main><Link href="/dashboard">← Dashboard</Link><div className="row between"><div><h1>Create a test</h1><p className="muted">Build by chapter, subject mix, saved questions, previous tests, an import, or new content.</p></div><div className="row" style={{flexWrap:'wrap'}}><Link className="secondary button" href="/test-blueprints">Smart blueprints</Link><Link className="secondary button" href="/question-bank">Question bank</Link></div></div>{query.error && <p className="bad">{query.error}</p>}<ClassroomTestBuilder action={createTest} bankQuestions={bank as any} previousTests={previousTests as any} /></main>
 }
