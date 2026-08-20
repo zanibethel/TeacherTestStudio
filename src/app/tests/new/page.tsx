@@ -10,8 +10,8 @@ export default async function NewTest({searchParams}:{searchParams:Promise<{erro
   const{data:bank}=await supabase.from('question_bank').select('id,prompt,choices,correct_index,content_area,subject_category,chapter_number,chapter_title,focused_retake_hint').eq('teacher_id',user.id).order('updated_at',{ascending:false}).limit(2000)
   const query=await searchParams
   return <main>
-    <Link href="/dashboard">← Dashboard</Link>
-    <div className="row between" style={{alignItems:'flex-start',gap:12,flexWrap:'wrap'}}><div><span className="eyebrow">BUILD A TEST</span><h1 style={{margin:'5px 0'}}>Build a test</h1><p className="muted" style={{margin:0}}>Give it a name and choose questions from your Question Bank. Assignment settings come later.</p></div><Link className="secondary button" href="/assignments/new">Create assignment instead</Link></div>
+    <div className="row between" style={{alignItems:'center',gap:12,flexWrap:'wrap'}}><Link href="/dashboard">← Dashboard</Link><Link href="/assignments/new">Create assignment →</Link></div>
+    <div style={{marginTop:18}}><span className="eyebrow">BUILD A TEST</span><p className="muted" style={{margin:'8px 0 0'}}>Give it a name and choose questions from your Question Bank. Assignment settings come later.</p></div>
     {query.error&&<p className="bad notice">{query.error}</p>}
     <SimpleTestBuilder action={createTest} bankQuestions={(bank??[]) as any}/>
   </main>
