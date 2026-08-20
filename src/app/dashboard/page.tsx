@@ -8,7 +8,7 @@ export default async function Dashboard({searchParams}:{searchParams:Promise<{er
   const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
   const{data:profile}=await supabase.from('profiles').select('full_name,role,teacher_approved,teacher_can_invite').eq('id',user.id).single();const query=await searchParams
   if(profile?.role==='teacher'){
-    if(!profile.teacher_approved)return <main className="narrow"><div className="row between"><h1>Teacher access pending</h1><form action="/auth/signout" method="post"><button className="ghost">Sign out</button></form></div><section className="card"><p>This account does not have approved teacher access.</p><p className="muted">Teacher tools are invite-only. Ask the approved teacher who invited you to send a valid one-time invitation link.</p></section></main>
+    if(!profile.teacher_approved)return <main className="narrow"><h1>Teacher access pending</h1><section className="card"><p>This account does not have approved teacher access.</p><p className="muted">Teacher tools are invite-only. Ask the approved teacher who invited you to send a valid one-time invitation link.</p></section></main>
     const[{data:tests},{count:bankCount},{count:connectedStudents},{count:groupCount},{data:activeShares}]=await Promise.all([
       supabase.from('tests').select('id,title,status,share_code,created_at,updated_at,randomize_questions,assessment_type,attempts(count)').order('updated_at',{ascending:false}),
       supabase.from('question_bank').select('*',{count:'exact',head:true}),
@@ -29,7 +29,6 @@ export default async function Dashboard({searchParams}:{searchParams:Promise<{er
     const setupDone=gettingStarted.filter(step=>step.done).length
     return <main>
       {query.error&&<p className="bad notice">{query.error}</p>}
-      <div className="eyebrow" style={{margin:'0 0 10px 2px'}}>Teacher workspace</div>
 
       {!setupComplete&&<section className="card" style={{padding:16}}>
         <div className="row between" style={{alignItems:'center'}}><div><h2 style={{margin:0}}>Set up your classroom</h2></div><span className="pill">{setupDone}/5</span></div>
@@ -58,8 +57,8 @@ export default async function Dashboard({searchParams}:{searchParams:Promise<{er
     supabase.from('practice_sessions').select('id,status,score_percent,source_attempt_id,source_share_id,created_at').eq('student_id',user.id).order('created_at',{ascending:false})
   ])
   const completed=(attempts??[]).filter((a:any)=>a.submitted_at)
-  return <main><div className="row between"><div><h1>Student dashboard</h1><p className="muted">Welcome, {profile?.full_name||user.email}</p></div><form action="/auth/signout" method="post"><button className="ghost">Sign out</button></form></div>{query.error&&<p className="bad">{query.error}</p>}
-    <div style={{marginTop:20}}><h2 style={{marginBottom:4}}>My assignments</h2><p className="muted" style={{marginTop:0}}>Your next step updates automatically as you test, remediate weak areas, and retest.</p></div>
+  return <main>{query.error&&<p className="bad">{query.error}</p>}
+    <div style={{marginTop:4}}><h1 style={{marginBottom:4}}>My assignments</h1><p className="muted" style={{marginTop:0}}>Your next step updates automatically as you test, remediate weak areas, and retest.</p></div>
     <StudentAssignments assignments={(assignments??[]) as any[]} attempts={(attempts??[]) as any[]} practiceSessions={(practiceSessions??[]) as any[]}/>
     <form action="/take/go" method="get" className="card"><h2>Open with a test code</h2><label>Teacher&apos;s test code</label><input name="code" required autoCapitalize="characters" placeholder="AB12CD34"/><button>Open test</button><div className="row" style={{marginTop:'1rem',flexWrap:'wrap'}}><Link className="secondary button" href="/practice-library">Browse practice passes</Link><Link className="secondary button" href="/find-teacher">Find my teacher</Link></div><p className="muted">Assigned work appears above automatically. Use Find my teacher only when you need to connect with a teacher who has not assigned anything to you yet.</p></form>
     {completed.length>0&&<details className="card"><summary style={{cursor:'pointer',fontWeight:800}}>Attempt history · {completed.length}</summary><div style={{marginTop:12}}>{completed.map((a:any)=><Link className="card card-link result-row" key={a.id} href={`/attempts/${a.id}`}><div><b>{Array.isArray(a.tests)?a.tests[0]?.title:a.tests?.title}</b><p className="muted">Attempt {a.attempt_number} · {new Date(a.submitted_at).toLocaleString()}</p></div><strong>{a.score_percent}%</strong></Link>)}</div></details>}
