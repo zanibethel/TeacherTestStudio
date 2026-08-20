@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { bulkUpdateBankQuestionMetadata,deleteBankQuestion,refreshSharedBankQuestions } from './actions'
 import QuestionBankBrowser from './QuestionBankBrowser'
 
-export default async function QuestionBank({searchParams}:{searchParams:Promise<{error?:string;refreshed?:string;bulkUpdated?:string;added?:string;merged?:string}>}){
+export default async function QuestionBank({searchParams}:{searchParams:Promise<{error?:string;refreshed?:string;bulkUpdated?:string;added?:string;merged?:string;imported?:string;importMerged?:string;importSkipped?:string;importConflicts?:string}>}){
   const query=await searchParams
   const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
   const{data:profile}=await supabase.from('profiles').select('role,teacher_approved').eq('id',user.id).single();if(profile?.role!=='teacher'||!profile.teacher_approved)redirect('/dashboard')
@@ -22,11 +22,13 @@ export default async function QuestionBank({searchParams}:{searchParams:Promise<
   const subjectsByQuestion=new Map<string,string[]>();for(const row of subjectRows??[])subjectsByQuestion.set((row as any).question_id,[...(subjectsByQuestion.get((row as any).question_id)||[]),String((row as any).subject_category||'').trim()].filter(Boolean))
   const bank=(questions??[]).map((q:any)=>{const source=q.imported_collection_id?collectionMap.get(q.imported_collection_id):null;return{...q,collection_title:source?.parentTitle||source?.title||null,collection_section:source?.parentTitle?source.title:null,chapters:chaptersByQuestion.get(q.id)||[],subjects:subjectsByQuestion.get(q.id)||[]}})
   const importedCount=(questions??[]).filter((q:any)=>q.shared_question_id).length
+  const importResult=query.imported!==undefined||query.importMerged!==undefined||query.importSkipped!==undefined||query.importConflicts!==undefined
   return <main>
-    <div className="row between" style={{alignItems:'flex-start',gap:12,flexWrap:'wrap'}}><div><Link href="/dashboard">← Dashboard</Link><h1>Question bank</h1><p className="muted">One question can belong to multiple chapters and subjects without creating duplicate copies.</p></div><div className="row" style={{flexWrap:'wrap'}}><Link className="secondary button" href="/shared-library">Browse shared library</Link><Link className="button" href="/tests/new">+ Build a test</Link><Link className="secondary button" href="/question-bank/new">+ Add questions</Link></div></div>
+    <div className="row between" style={{alignItems:'flex-start',gap:12,flexWrap:'wrap'}}><div><Link href="/dashboard">← Dashboard</Link><h1>Question bank</h1><p className="muted">One question can belong to multiple chapters and subjects without creating duplicate copies.</p></div><div className="row" style={{flexWrap:'wrap'}}><Link className="secondary button" href="/shared-library">Browse shared library</Link><Link className="button" href="/tests/new">+ Build a test</Link><Link className="secondary button" href="/question-bank/new">+ Add questions</Link><Link className="secondary button" href="/question-bank/import">Import & review</Link></div></div>
     {query.error&&<p className="bad notice">{query.error}</p>}
     {query.added!==undefined&&<p className="good notice">Question added to your bank.</p>}
     {query.merged!==undefined&&<p className="good notice">Existing question found. Its chapter and subject classifications were combined instead of creating a duplicate.</p>}
+    {importResult&&<p className={Number(query.importConflicts||0)>0?'notice':'good notice'}><b>Import complete.</b> {Number(query.imported||0)} new · {Number(query.importMerged||0)} merged · {Number(query.importSkipped||0)} skipped{Number(query.importConflicts||0)>0?` · ${Number(query.importConflicts)} conflicts not imported`:''}.</p>}
     {query.refreshed!==undefined&&<p className="good notice">Shared questions refreshed. {Number(query.refreshed)||0} bank question{Number(query.refreshed)===1?'':'s'} updated.</p>}
     {query.bulkUpdated!==undefined&&<p className="good notice">Classification tags added to {Number(query.bulkUpdated)||0} question{Number(query.bulkUpdated)===1?'':'s'}.</p>}
     {importedCount>0&&<section className="card" style={{padding:'14px 16px'}}><div className="row between" style={{alignItems:'center',gap:12,flexWrap:'wrap'}}><div><b>Imported shared questions</b><p className="muted" style={{margin:'4px 0 0'}}>Pull the latest shared-library wording, answers, chapter metadata, subject categories, explanations, and focused-retake hints. Custom questions are not changed.</p></div><form action={refreshSharedBankQuestions}><button className="secondary">Refresh shared questions</button></form></div></section>}
