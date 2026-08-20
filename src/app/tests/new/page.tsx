@@ -14,8 +14,8 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
   if (profile?.role !== 'teacher') redirect('/dashboard')
 
   const [{ data: bankRaw }, { data: previousRaw }] = await Promise.all([
-    supabase.from('question_bank').select('id,prompt,choices,correct_index,content_area,source_type,focused_retake_hint,imported_collection_id').order('updated_at',{ascending:false}).limit(1000),
-    supabase.from('tests').select('id,title,updated_at,assessment_type,chapter_label,questions(id,prompt,position,content_area,focused_retake_hint,choices(id,label,position),question_answers(choice_id))').eq('teacher_id',user.id).order('updated_at',{ascending:false}).limit(50),
+    supabase.from('question_bank').select('id,prompt,choices,correct_index,content_area,subject_category,chapter_number,chapter_title,source_type,focused_retake_hint,imported_collection_id').order('updated_at',{ascending:false}).limit(1000),
+    supabase.from('tests').select('id,title,updated_at,assessment_type,chapter_label,questions(id,prompt,position,content_area,subject_category,chapter_number,chapter_title,focused_retake_hint,choices(id,label,position),question_answers(choice_id))').eq('teacher_id',user.id).order('updated_at',{ascending:false}).limit(50),
   ])
 
   const collectionIds=[...new Set((bankRaw??[]).map((q:any)=>q.imported_collection_id).filter(Boolean))]
@@ -26,33 +26,22 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
 
   const bank=(bankRaw??[]).map((q:any)=>({
     ...q,
+    subject_category:q.subject_category??q.content_area,
     bundle_title:q.imported_collection_id?collectionTitle.get(q.imported_collection_id)||'Imported resource':'My custom questions',
   }))
   const bankByPrompt=new Map(bank.map((q:any)=>[normalizeQuestion(q.prompt),q]))
 
   const previousTests=(previousRaw??[]).map((test:any)=>({
-    id:test.id,
-    title:test.title,
-    updated_at:test.updated_at,
-    assessment_type:test.assessment_type,
-    chapter_label:test.chapter_label,
+    id:test.id,title:test.title,updated_at:test.updated_at,assessment_type:test.assessment_type,chapter_label:test.chapter_label,
     questions:[...(test.questions??[])].sort((a:any,b:any)=>a.position-b.position).map((q:any)=>{
       const choices=[...(q.choices??[])].sort((a:any,b:any)=>a.position-b.position)
       const answer=Array.isArray(q.question_answers)?q.question_answers[0]:q.question_answers
       const correctIndex=Math.max(0,choices.findIndex((c:any)=>c.id===answer?.choice_id))
       const bankMatch=bankByPrompt.get(normalizeQuestion(q.prompt)) as any
-      return {
-        id:q.id,
-        prompt:q.prompt,
-        choices:choices.map((c:any)=>c.label),
-        correct_index:correctIndex,
-        content_area:q.content_area,
-        focused_retake_hint:q.focused_retake_hint,
-        bank_id:bankMatch?.id??null,
-      }
+      return {id:q.id,prompt:q.prompt,choices:choices.map((c:any)=>c.label),correct_index:correctIndex,content_area:q.content_area,subject_category:q.subject_category??q.content_area,chapter_number:q.chapter_number,chapter_title:q.chapter_title,focused_retake_hint:q.focused_retake_hint,bank_id:bankMatch?.id??null}
     }),
   })).filter((t:any)=>t.questions.length)
 
   const query = await searchParams
-  return <main><Link href="/dashboard">← Dashboard</Link><div className="row between"><div><h1>Create a test</h1><p className="muted">Build a chapter exam or custom classroom test from saved questions, previous tests, an import, or new content.</p></div><Link className="secondary button" href="/question-bank">Question bank</Link></div>{query.error && <p className="bad">{query.error}</p>}<ClassroomTestBuilder action={createTest} bankQuestions={bank as any} previousTests={previousTests as any} /></main>
+  return <main><Link href="/dashboard">← Dashboard</Link><div className="row between"><div><h1>Create a test</h1><p className="muted">Build by chapter, subject mix, saved questions, previous tests, an import, or new content.</p></div><Link className="secondary button" href="/question-bank">Question bank</Link></div>{query.error && <p className="bad">{query.error}</p>}<ClassroomTestBuilder action={createTest} bankQuestions={bank as any} previousTests={previousTests as any} /></main>
 }
