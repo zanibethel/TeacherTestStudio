@@ -14,7 +14,10 @@ export async function createFocusPractice(attemptId:string,fd:FormData){
 export async function submitFocusPractice(sessionId:string,fd:FormData){
   const supabase=await createClient()
   const answers:Record<string,number>={}
-  for(const [key,value] of fd.entries())if(key.startsWith('q_'))answers[key.slice(2)]=Number(value)
+  for(const [key,value] of fd.entries())if(key.startsWith('q_')){
+    const raw=String(value).trim()
+    if(raw!=='')answers[key.slice(2)]=Number(raw)
+  }
   const{error}=await supabase.rpc('submit_practice_session',{p_session_id:sessionId,p_answers:answers})
   if(error)redirect(`/practice/${sessionId}?error=${encodeURIComponent(error.message)}`)
   redirect(`/practice/${sessionId}`)
