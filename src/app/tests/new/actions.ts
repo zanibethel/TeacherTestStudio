@@ -49,7 +49,12 @@ export async function saveSubjectMixPreset(name: string, weights: Record<string,
   if (profile?.role !== 'teacher' || !profile.teacher_approved) return { ok: false, error: 'Teacher access is required.' }
   const cleanName = name.trim()
   if (!cleanName || cleanName.length > 80) return { ok: false, error: 'Preset name must be between 1 and 80 characters.' }
-  const clean = Object.fromEntries(Object.entries(weights).map(([key, value]) => [key.trim(), Number(value)]).filter(([key, value]) => key && Number.isFinite(value) && value >= 0 && value <= 100)) as Record<string, number>
+  const clean: Record<string, number> = {}
+  for (const [rawKey, rawValue] of Object.entries(weights)) {
+    const key = rawKey.trim()
+    const value = Number(rawValue)
+    if (key && Number.isFinite(value) && value >= 0 && value <= 100) clean[key] = value
+  }
   const total = Object.values(clean).reduce((sum, value) => sum + value, 0)
   if (!Object.keys(clean).length || Math.round(total) !== 100) return { ok: false, error: `Preset percentages must total 100%. Current total: ${total}%.` }
   const payload = { teacher_id: user.id, name: cleanName, subject_weights: clean, updated_at: new Date().toISOString() }
