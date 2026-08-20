@@ -8,16 +8,16 @@ type Section={key:string;title:string;questions:BankQuestion[]}
 type Group={title:string;sections:Section[]}
 
 function normalize(value:string){return value.toLowerCase().replace(/\s+/g,' ').trim()}
-function chapterLabel(q:BankQuestion){if(q.chapter_number)return `Chapter ${q.chapter_number}${q.chapter_title?` — ${q.chapter_title}`:''}`;if(q.chapter_title)return q.chapter_title;return 'No chapter'}
-function subjectLabel(q:BankQuestion){return q.subject_category||q.content_area||q.collection_section||'Uncategorized'}
+function chapterLabel(q:BankQuestion){if(q.chapter_number)return `Chapter ${q.chapter_number}${q.chapter_title?` — ${q.chapter_title}`:''}`;if(q.chapter_title)return q.chapter_title;return 'Unassigned'}
+function subjectLabel(q:BankQuestion){return q.subject_category||q.content_area||q.collection_section||'Unassigned'}
 function SelectionBox({checked,indeterminate,onChange,label}:{checked:boolean;indeterminate?:boolean;onChange:(checked:boolean)=>void;label:string}){const ref=useRef<HTMLInputElement>(null);useEffect(()=>{if(ref.current)ref.current.indeterminate=Boolean(indeterminate)},[indeterminate]);return <label className="bank-tree-check" onClick={e=>e.stopPropagation()}><input ref={ref} type="checkbox" checked={checked} onChange={e=>onChange(e.target.checked)}/><span>{label}</span></label>}
 
 export default function QuestionBankBrowser({questions,deleteAction,bulkAction}:{questions:BankQuestion[];deleteAction:(id:string)=>Promise<void>|void;bulkAction:(formData:FormData)=>Promise<void>|void}){
  const[search,setSearch]=useState('');const[selected,setSelected]=useState<Set<string>>(()=>new Set());const needle=normalize(search)
  const filtered=useMemo(()=>questions.filter(q=>!needle||normalize(`${q.prompt} ${chapterLabel(q)} ${subjectLabel(q)} ${q.collection_title??''} ${q.collection_section??''} ${q.source_type??''}`).includes(needle)),[questions,needle])
- const subjectOptions=useMemo(()=>[...new Set(questions.map(subjectLabel).filter(x=>x!=='Uncategorized'))].sort((a,b)=>a.localeCompare(b)),[questions])
+ const subjectOptions=useMemo(()=>[...new Set(questions.map(subjectLabel).filter(x=>x!=='Unassigned'))].sort((a,b)=>a.localeCompare(b)),[questions])
  const chapterTitleOptions=useMemo(()=>[...new Set(questions.map(q=>q.chapter_title?.trim()).filter((x):x is string=>Boolean(x)))].sort((a,b)=>a.localeCompare(b)),[questions])
- const groups=useMemo<Group[]>(()=>{const byBundle=new Map<string,Map<string,BankQuestion[]>>();for(const q of filtered){const bundle=q.collection_title||'My questions';const chapter=chapterLabel(q);const subject=subjectLabel(q);const key=`${chapter}|||${subject}`;if(!byBundle.has(bundle))byBundle.set(bundle,new Map());const sections=byBundle.get(bundle)!;sections.set(key,[...(sections.get(key)||[]),q])}return[...byBundle.entries()].map(([title,sections])=>({title,sections:[...sections.entries()].map(([key,items])=>{const[chapter,subject]=key.split('|||');return{key,title:`${chapter} · ${subject}`,questions:items}}).sort((a,b)=>a.title.localeCompare(b.title,undefined,{numeric:true}))}))},[filtered])
+ const groups=useMemo<Group[]>(()=>{const byBundle=new Map<string,Map<string,BankQuestion[]>>();for(const q of filtered){const bundle=q.collection_title||'Custom';const chapter=chapterLabel(q);const subject=subjectLabel(q);const key=`${chapter}|||${subject}`;if(!byBundle.has(bundle))byBundle.set(bundle,new Map());const sections=byBundle.get(bundle)!;sections.set(key,[...(sections.get(key)||[]),q])}return[...byBundle.entries()].map(([title,sections])=>({title,sections:[...sections.entries()].map(([key,items])=>{const[chapter,subject]=key.split('|||');return{key,title:`${chapter} · ${subject}`,questions:items}}).sort((a,b)=>a.title.localeCompare(b.title,undefined,{numeric:true}))}))},[filtered])
  function setMany(ids:string[],checked:boolean){setSelected(current=>{const next=new Set(current);ids.forEach(id=>checked?next.add(id):next.delete(id));return next})}
  const selectedVisible=filtered.filter(q=>selected.has(q.id)).length
  return <>
@@ -25,11 +25,11 @@ export default function QuestionBankBrowser({questions,deleteAction,bulkAction}:
 
   {selected.size>0&&<form action={bulkAction} className="card bank-bulk-editor">
     {[...selected].map(id=><input type="hidden" name="question_ids" value={id} key={id}/>)}
-    <div className="row between bank-bulk-heading"><div><h2>Organize {selected.size} selected question{selected.size===1?'':'s'}</h2><p className="muted">Fill only the fields you want to change. Blank fields keep each question’s current value.</p></div><button className="ghost" type="button" onClick={()=>setSelected(new Set())}>Clear selection</button></div>
+    <div className="row between bank-bulk-heading"><div><h2>Organize {selected.size} selected question{selected.size===1?'':'s'}</h2><p className="muted">Fill only the fields you want to change. Existing chapter and subject values are suggested, but new values are allowed.</p></div><button className="ghost" type="button" onClick={()=>setSelected(new Set())}>Clear selection</button></div>
     <div className="bank-bulk-grid">
       <div><label>Chapter number</label><input name="chapter_number" type="number" min="1" step="1" placeholder="Example: 4"/></div>
-      <div><label>Chapter title</label><input name="chapter_title" list="bank-chapter-titles" placeholder="Example: Infection Control"/><datalist id="bank-chapter-titles">{chapterTitleOptions.map(title=><option value={title} key={title}/>)}</datalist></div>
-      <div><label>Subject category</label><input name="subject_category" list="bank-subject-categories" placeholder="Example: Safety & Sanitation"/><datalist id="bank-subject-categories">{subjectOptions.map(subject=><option value={subject} key={subject}/>)}</datalist></div>
+      <div><label>Chapter title</label><input name="chapter_title" list="bank-chapter-titles" placeholder="Select or create a chapter"/><datalist id="bank-chapter-titles">{chapterTitleOptions.map(title=><option value={title} key={title}/>)}</datalist></div>
+      <div><label>Subject category</label><input name="subject_category" list="bank-subject-categories" placeholder="Select or create a subject"/><datalist id="bank-subject-categories">{subjectOptions.map(subject=><option value={subject} key={subject}/>)}</datalist></div>
     </div>
     <div className="row bank-bulk-actions"><button type="submit">Apply to {selected.size}</button><span className="muted">The smart-test builder will use these values immediately.</span></div>
   </form>}
