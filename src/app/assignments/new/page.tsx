@@ -15,9 +15,12 @@ export default async function NewAssignment({searchParams}:{searchParams:Promise
   if(!query.test){
     return <main>
       <Link href="/dashboard">← Dashboard</Link>
-      <div className="row between" style={{alignItems:'flex-start',gap:12,flexWrap:'wrap'}}><div><span className="eyebrow">CREATE ASSIGNMENT</span><h1 style={{margin:'5px 0'}}>Choose a test</h1><p className="muted" style={{margin:0}}>Start with a test you already built, or build a new one first.</p></div><Link className="button" href="/tests/new">+ Build a new test</Link></div>
+      <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr) auto',alignItems:'end',gap:16,marginTop:12}}>
+        <div><h1 style={{margin:'0 0 4px'}}>Choose a test</h1><p className="muted" style={{margin:0}}>Select a test to assign.</p></div>
+        <Link href="/tests/new" style={{fontWeight:800,whiteSpace:'nowrap',paddingBottom:4}}>Build a new test →</Link>
+      </div>
       {query.error&&<p className="bad notice">{query.error}</p>}
-      {!tests?.length?<section className="card empty-state"><h2>No tests yet</h2><p className="muted">Build your first test from the Question Bank, then come back here to assign it.</p><Link className="button" href="/tests/new">Build a test</Link></section>:<section className="card stack"><div><h2 style={{marginBottom:4}}>Your tests</h2><p className="muted" style={{marginTop:0}}>Choose one to continue to students and assignment presets.</p></div>{tests.map((test:any)=><Link key={test.id} href={`/assignments/new?test=${test.id}`} className="card card-link" style={{margin:0}}><div className="row between" style={{gap:12}}><div><b>{test.title}</b><p className="muted" style={{margin:'4px 0 0'}}>{test.description||'No description'} · {test.questions?.[0]?.count??0} questions</p></div><span aria-hidden style={{fontWeight:900}}>→</span></div></Link>)}</section>}
+      {!tests?.length?<section className="card empty-state" style={{marginTop:18}}><h2>No tests yet</h2><p className="muted">Build your first test from the Question Bank, then assign it here.</p><Link className="button" href="/tests/new">Build a test</Link></section>:<section style={{marginTop:18}}><h2 style={{margin:'0 0 10px',fontSize:20}}>Available tests</h2><div style={{display:'grid',gap:10}}>{tests.map((test:any)=><Link key={test.id} href={`/assignments/new?test=${test.id}`} className="card card-link" style={{margin:0,padding:'16px 18px'}}><div className="row between" style={{gap:12,alignItems:'center',flexWrap:'nowrap'}}><div style={{minWidth:0}}><b style={{display:'block',fontSize:18}}>{test.title}</b><p className="muted" style={{margin:'3px 0 0'}}>{test.questions?.[0]?.count??0} questions{test.description?` · ${test.description}`:''}</p></div><span aria-hidden style={{fontWeight:900,fontSize:22}}>→</span></div></Link>)}</div></section>}
     </main>
   }
 
