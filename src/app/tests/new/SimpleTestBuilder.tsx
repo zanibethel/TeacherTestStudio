@@ -50,7 +50,7 @@ export default function SimpleTestBuilder({action,bankQuestions}:{action:(formDa
 
   return <form action={action} className="stack">
     <section className="card stack">
-      <div><span className="eyebrow">TEST CONTENT</span><h2 style={{margin:'5px 0 4px'}}>Test details</h2><p className="muted" style={{margin:0}}>A test is only its name, description, and questions. Assignment rules are added later.</p></div>
+      <div><h2 style={{margin:'0 0 4px'}}>Test details</h2></div>
       <div><label>Test title</label><input name="title" required maxLength={160} placeholder="Chapter 4 exam"/></div>
       <div><label>Description <span className="muted">(optional)</span></label><textarea name="description" rows={3} placeholder="What this test covers"/></div>
       <input type="hidden" name="assessment_type" value="custom"/>
