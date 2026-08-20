@@ -4,18 +4,24 @@ import {useEffect,useMemo,useRef,useState} from 'react'
 import './focus.css'
 
 type FocusQuestion={question_id:string;question_position:number;prompt:string;content_area:string|null;choices:string[];focused_retake_hint:string|null;previous_answer:string|null}
-type Props={title:string;questions:FocusQuestion[];showHints:boolean;required:boolean;minScore:number;action:(formData:FormData)=>void}
+type Props={title:string;questions:FocusQuestion[];showHints:boolean;required:boolean;minScore:number;action:(formData:FormData)=>void;modeLabel?:string;deadlineAt?:string|null;durationMinutes?:number|null;passingScore?:number|null}
 
-export default function FocusPracticeRunner({title,questions,showHints,required,minScore,action}:Props){
+function timeLabel(seconds:number){const s=Math.max(0,seconds);const m=Math.floor(s/60);const r=s%60;return `${m}:${String(r).padStart(2,'0')}`}
+
+export default function FocusPracticeRunner({title,questions,showHints,required,minScore,action,modeLabel,deadlineAt,durationMinutes,passingScore}:Props){
   const[current,setCurrent]=useState(0)
   const[answers,setAnswers]=useState<Record<string,number>>({})
   const[openHint,setOpenHint]=useState<string|null>(null)
+  const[secondsLeft,setSecondsLeft]=useState<number|null>(deadlineAt?Math.max(0,Math.ceil((new Date(deadlineAt).getTime()-Date.now())/1000)):null)
   const stripRef=useRef<HTMLDivElement>(null)
+  const formRef=useRef<HTMLFormElement>(null)
+  const submittedRef=useRef(false)
   const touchStart=useRef<{x:number;y:number;target:EventTarget|null}|null>(null)
   const ignoreChoiceUntil=useRef(0)
   const answeredCount=useMemo(()=>Object.keys(answers).length,[answers])
   const question=questions[current]
   const unanswered=questions.map((q,i)=>answers[q.question_id]===undefined?i:-1).filter(i=>i>=0)
+  const isExam=modeLabel==='Licensing exam simulation'||Boolean(deadlineAt)
 
   useEffect(()=>{
     document.body.classList.add('focus-practice-active')
@@ -27,6 +33,16 @@ export default function FocusPracticeRunner({title,questions,showHints,required,
     button?.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'})
     setOpenHint(null)
   },[current])
+
+  useEffect(()=>{
+    if(!deadlineAt)return
+    const tick=()=>{
+      const left=Math.max(0,Math.ceil((new Date(deadlineAt).getTime()-Date.now())/1000))
+      setSecondsLeft(left)
+      if(left===0&&!submittedRef.current){submittedRef.current=true;formRef.current?.requestSubmit()}
+    }
+    tick();const timer=window.setInterval(tick,1000);return()=>window.clearInterval(timer)
+  },[deadlineAt])
 
   function choose(index:number){
     if(Date.now()<ignoreChoiceUntil.current)return
@@ -52,11 +68,12 @@ export default function FocusPracticeRunner({title,questions,showHints,required,
   const atEnd=current===questions.length-1
   const allAnswered=answeredCount===questions.length
   const nextLabel=atEnd&&!allAnswered?'Next unanswered':atEnd?'Review & submit':'Next'
+  const eyebrow=modeLabel||'Focused retest'
 
   return <main className="focus-shell">
-    <header className="focus-topbar"><div><span className="eyebrow">Focused retest</span><h1>{title}</h1></div><div className="focus-progress" aria-label={`${answeredCount} of ${questions.length} answered`}><b>{answeredCount} of {questions.length}</b><span>answered</span></div></header>
-    <div className="focus-ruleline">{required?(minScore===0?'Completion unlocks the next full attempt':`${minScore}% required to unlock the next full attempt`):'Focused practice'}</div>
-    <form action={action} className="focus-form">
+    <header className="focus-topbar"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1></div><div className="focus-progress" aria-label={`${answeredCount} of ${questions.length} answered`}><b>{answeredCount} of {questions.length}</b><span>{secondsLeft!=null?`${timeLabel(secondsLeft)} left`:'answered'}</span></div></header>
+    <div className="focus-ruleline">{isExam?`${questions.length} questions${durationMinutes?` · ${durationMinutes} minutes`:''}${passingScore!=null?` · ${passingScore}% target`:''}`:required?(minScore===0?'Completion unlocks the next full attempt':`${minScore}% required to unlock the next full attempt`):'Focused practice'}</div>
+    <form ref={formRef} action={action} className="focus-form" onSubmit={()=>{submittedRef.current=true}}>
       {questions.map(q=><input key={q.question_id} type="hidden" name={`q_${q.question_id}`} value={answers[q.question_id]??''}/>) }
       <div className="focus-stage" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
         <section className="focus-question">
@@ -70,7 +87,7 @@ export default function FocusPracticeRunner({title,questions,showHints,required,
       </div>
       <div className="focus-dock">
         <div className="focus-number-strip" ref={stripRef}>{questions.map((q,i)=><button data-index={i} type="button" key={q.question_id} className={`${i===current?'current':''} ${answers[q.question_id]!==undefined?'answered':''}`} onClick={()=>setCurrent(i)}>{i+1}</button>)}</div>
-        <div className="focus-nav"><button type="button" className="secondary" onClick={previous} disabled={current===0}>Previous</button>{atEnd&&allAnswered?<button type="submit">Submit focused retest</button>:<button type="button" onClick={next}>{nextLabel}</button>}</div>
+        <div className="focus-nav"><button type="button" className="secondary" onClick={previous} disabled={current===0}>Previous</button>{atEnd&&allAnswered?<button type="submit">{isExam?'Submit exam':'Submit focused retest'}</button>:<button type="button" onClick={next}>{nextLabel}</button>}</div>
         {!allAnswered&&atEnd&&<span className="focus-unanswered">{unanswered.length} unanswered · Next jumps to the next one</span>}
       </div>
     </form>
