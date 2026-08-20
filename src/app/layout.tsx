@@ -2,6 +2,7 @@ import './globals.css'
 import './nav.css'
 import './footer.css'
 import './mobile-selection.css'
+import './mobile-polish.css'
 import AppHeader from '@/components/AppHeader'
 import SiteFooter from '@/components/SiteFooter'
 
