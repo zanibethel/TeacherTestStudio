@@ -29,6 +29,7 @@ export default async function Dashboard({searchParams}:{searchParams:Promise<{er
     const setupDone=gettingStarted.filter(step=>step.done).length
     return <main>
       {query.error&&<p className="bad notice">{query.error}</p>}
+      <div className="eyebrow" style={{margin:'0 0 10px 2px'}}>Teacher workspace</div>
 
       {!setupComplete&&<section className="card" style={{padding:16}}>
         <div className="row between" style={{alignItems:'center'}}><div><h2 style={{margin:0}}>Set up your classroom</h2></div><span className="pill">{setupDone}/5</span></div>
