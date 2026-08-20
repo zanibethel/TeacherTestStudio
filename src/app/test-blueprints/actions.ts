@@ -109,5 +109,5 @@ export async function generateFromBlueprint(id:string){
     p_due_at:null,
   })
   if(createError)redirect('/test-blueprints?error='+encodeURIComponent(createError.message))
-  redirect(`/tests/${testId}`)
+  redirect(`/tests/${testId}/preview?created=blueprint`)
 }

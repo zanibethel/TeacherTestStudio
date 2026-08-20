@@ -37,5 +37,5 @@ export async function createTest(formData: FormData) {
     p_due_at: null,
   })
   if (error) redirect('/tests/new?error=' + encodeURIComponent(error.message))
-  redirect(`/tests/${data}`)
+  redirect(`/tests/${data}/preview?created=1`)
 }
