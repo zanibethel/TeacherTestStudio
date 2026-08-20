@@ -15,7 +15,7 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
 
   const [{ data: bankRaw }, { data: previousRaw }] = await Promise.all([
     supabase.from('question_bank').select('id,prompt,choices,correct_index,content_area,source_type,focused_retake_hint,imported_collection_id').order('updated_at',{ascending:false}).limit(1000),
-    supabase.from('tests').select('id,title,updated_at,questions(id,prompt,position,content_area,focused_retake_hint,choices(id,label,position),question_answers(choice_id))').eq('teacher_id',user.id).order('updated_at',{ascending:false}).limit(50),
+    supabase.from('tests').select('id,title,updated_at,assessment_type,chapter_label,questions(id,prompt,position,content_area,focused_retake_hint,choices(id,label,position),question_answers(choice_id))').eq('teacher_id',user.id).order('updated_at',{ascending:false}).limit(50),
   ])
 
   const collectionIds=[...new Set((bankRaw??[]).map((q:any)=>q.imported_collection_id).filter(Boolean))]
@@ -34,6 +34,8 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
     id:test.id,
     title:test.title,
     updated_at:test.updated_at,
+    assessment_type:test.assessment_type,
+    chapter_label:test.chapter_label,
     questions:[...(test.questions??[])].sort((a:any,b:any)=>a.position-b.position).map((q:any)=>{
       const choices=[...(q.choices??[])].sort((a:any,b:any)=>a.position-b.position)
       const answer=Array.isArray(q.question_answers)?q.question_answers[0]:q.question_answers
