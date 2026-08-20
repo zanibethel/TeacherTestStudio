@@ -29,7 +29,7 @@ export default async function AppHeader(){
   return <header className="site-header">
     <div className="site-header-inner">
       <Link className="brand" href={user?'/dashboard':'/'}><b>CramLoop</b></Link>
-      {!user?<Link href="/login">Sign in</Link>:<div className="row" style={{gap:8,alignItems:'center'}}>
+      {!user?<Link href="/login">Sign in</Link>:<div className="row" style={{gap:8,alignItems:'center',margin:'0 0 0 auto',padding:0,maxWidth:'none'}}>
         {role==='teacher'&&<Link href="/notifications" aria-label={attentionCount?`Notifications, ${attentionCount} items need attention`:'Notifications'} title="Notifications" style={{position:'relative',display:'grid',placeItems:'center',width:44,height:44,borderRadius:12,color:'inherit',textDecoration:'none',fontSize:24}}>
           <span aria-hidden>🔔</span>
           {attentionCount>0&&<span aria-hidden style={{position:'absolute',top:2,right:0,minWidth:20,height:20,padding:'0 5px',borderRadius:999,display:'grid',placeItems:'center',background:'#ef4444',color:'#fff',fontSize:11,fontWeight:900,lineHeight:1}}>{attentionCount>99?'99+':attentionCount}</span>}
