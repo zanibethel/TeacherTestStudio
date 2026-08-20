@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import TestBuilder from './TestBuilder'
+import ClassroomTestBuilder from './ClassroomTestBuilder'
 import { createTest } from './actions'
 
 function normalizeQuestion(value:string){return value.toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim()}
@@ -52,5 +52,5 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
   })).filter((t:any)=>t.questions.length)
 
   const query = await searchParams
-  return <main><Link href="/dashboard">← Dashboard</Link><div className="row between"><div><h1>Create a test</h1><p className="muted">Build from your saved question bank, previous tests, an import, or new questions.</p></div><Link className="secondary button" href="/question-bank">Question bank</Link></div>{query.error && <p className="bad">{query.error}</p>}<TestBuilder action={createTest} bankQuestions={bank as any} previousTests={previousTests as any} /></main>
+  return <main><Link href="/dashboard">← Dashboard</Link><div className="row between"><div><h1>Create a test</h1><p className="muted">Build a chapter exam or custom classroom test from saved questions, previous tests, an import, or new content.</p></div><Link className="secondary button" href="/question-bank">Question bank</Link></div>{query.error && <p className="bad">{query.error}</p>}<ClassroomTestBuilder action={createTest} bankQuestions={bank as any} previousTests={previousTests as any} /></main>
 }
