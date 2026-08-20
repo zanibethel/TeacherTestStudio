@@ -1,5 +1,6 @@
 'use server'
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
 export async function createTest(formData: FormData) {
@@ -38,4 +39,22 @@ export async function createTest(formData: FormData) {
   })
   if (error) redirect('/tests/new?error=' + encodeURIComponent(error.message))
   redirect(`/tests/${data}/preview?created=1`)
+}
+
+export async function saveSubjectMixPreset(name: string, weights: Record<string, number>) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Sign in again before saving a preset.' }
+  const { data: profile } = await supabase.from('profiles').select('role,teacher_approved').eq('id', user.id).single()
+  if (profile?.role !== 'teacher' || !profile.teacher_approved) return { ok: false, error: 'Teacher access is required.' }
+  const cleanName = name.trim()
+  if (!cleanName || cleanName.length > 80) return { ok: false, error: 'Preset name must be between 1 and 80 characters.' }
+  const clean = Object.fromEntries(Object.entries(weights).map(([key, value]) => [key.trim(), Number(value)]).filter(([key, value]) => key && Number.isFinite(value) && value >= 0 && value <= 100)) as Record<string, number>
+  const total = Object.values(clean).reduce((sum, value) => sum + value, 0)
+  if (!Object.keys(clean).length || Math.round(total) !== 100) return { ok: false, error: `Preset percentages must total 100%. Current total: ${total}%.` }
+  const payload = { teacher_id: user.id, name: cleanName, subject_weights: clean, updated_at: new Date().toISOString() }
+  const { data, error } = await supabase.from('teacher_subject_mix_presets').upsert(payload, { onConflict: 'teacher_id,name' }).select('id,name,subject_weights').single()
+  if (error) return { ok: false, error: error.message }
+  revalidatePath('/tests/new')
+  return { ok: true, preset: data }
 }
