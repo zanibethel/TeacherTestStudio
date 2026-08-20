@@ -34,7 +34,7 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
   const bank=(bankRaw??[]).map((q:any)=>{
     const bundle=q.imported_collection_id?collectionBundle.get(q.imported_collection_id):undefined
     const sourceKey=!q.imported_collection_id?'custom':bundle?`bundle:${bundle.bundle_id}`:`collection:${q.imported_collection_id}`
-    const sourceTitle=!q.imported_collection_id?'My custom questions':bundle?.bundle_title||collectionTitle.get(q.imported_collection_id)||'Imported resource'
+    const sourceTitle=!q.imported_collection_id?'Custom':bundle?.bundle_title||collectionTitle.get(q.imported_collection_id)||'Imported resource'
     return {...q,subject_category:q.subject_category??q.content_area,bundle_title:sourceTitle,source_bucket_key:sourceKey,source_bucket_title:sourceTitle}
   })
   const sourceMap=new Map<string,{key:string;title:string;kind:'custom'|'bundle'|'collection';bundleId:string|null;collectionIds:Set<string>;questionCount:number}>()
