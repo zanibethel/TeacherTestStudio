@@ -1,13 +1,13 @@
 import Link from 'next/link'
 import { login, signup, requestPasswordReset } from './actions'
 
-export default async function Login({searchParams}:{searchParams:Promise<{error?:string,message?:string,role?:string,invite?:string,next?:string}>}){
+export default async function Login({searchParams}:{searchParams:Promise<{error?:string,message?:string,role?:string,invite?:string,email?:string,next?:string}>}){
   const q=await searchParams
   const invitedTeacher=q.role==='teacher'&&Boolean(q.invite)
   const next=q.next?.startsWith('/')&&!q.next.startsWith('//')?q.next:'/dashboard'
 
   if(invitedTeacher){
-    return <main className="narrow"><Link href="/">← Home</Link><h1>Invited teacher signup</h1><p className="muted">This private invitation creates an approved teacher account.</p>{q.error&&<p className="bad notice">{q.error}</p>}{q.message&&<p className="good notice">{q.message}</p>}<form className="card stack"><input type="hidden" name="next" value={next}/><input type="hidden" name="role" value="teacher"/><input type="hidden" name="teacher_invite" value={q.invite}/><label>Name</label><input name="full_name" required/><label>Email</label><input name="email" type="email" required/><label>Password</label><input name="password" type="password" required minLength={6}/><div className="notice"><b>Teacher invitation</b><p className="muted">This one-time invite unlocks approved teacher tools after account creation and email confirmation.</p></div><button formAction={signup}>Create teacher account</button></form></main>
+    return <main className="narrow"><Link href="/">← Home</Link><h1>Invited teacher signup</h1><p className="muted">This private invitation is bound to the teacher email chosen by the inviter.</p>{q.error&&<p className="bad notice">{q.error}</p>}{q.message&&<p className="good notice">{q.message}</p>}<form className="card stack"><input type="hidden" name="next" value={next}/><input type="hidden" name="role" value="teacher"/><input type="hidden" name="teacher_invite" value={q.invite}/><label>Name</label><input name="full_name" required/><label>Email</label><input name="email" type="email" required autoComplete="email" defaultValue={q.email||''}/><label>Password</label><input name="password" type="password" required minLength={6}/><div className="notice"><b>Teacher invitation</b><p className="muted">Use the email this invitation was created for. The link expires after 7 days and works once.</p></div><button formAction={signup}>Create teacher account</button></form></main>
   }
 
   return <main className="narrow"><Link href="/">← Home</Link><h1>Sign in</h1><p className="muted">Access your CramLoop tests, assignments, practice, and reports.</p>{q.error&&<p className="bad notice">{q.error}</p>}{q.message&&<p className="good notice">{q.message}</p>}
