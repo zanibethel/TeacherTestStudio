@@ -20,7 +20,8 @@ export default function BlueprintEditor({action,questions,initial}:{action:(form
   const total=subjects.reduce((sum,s)=>sum+(Number(weights[s])||0),0)
   const hasWeights=subjects.some(s=>(Number(weights[s])||0)>0)
   const chapterFilters=[...selected].map(key=>chapterMap.get(key)).filter(Boolean).map(x=>({chapter_number:x!.chapter_number,chapter_title:x!.chapter_title}))
-  const subjectWeights=Object.fromEntries(subjects.map(s=>[s,Number(weights[s])||0]).filter(([,v])=>v>0))
+  const subjectWeightPairs=subjects.map(s=>[s,Number(weights[s])||0] as const).filter(([,v])=>v>0)
+  const subjectWeights=Object.fromEntries(subjectWeightPairs)
   function toggle(key:string){setSelected(current=>{const next=new Set(current);next.has(key)?next.delete(key):next.add(key);return next})}
   function equalize(){if(!subjects.length)return;const base=Math.floor(100/subjects.length);let remainder=100-base*subjects.length;const next:Record<string,string>={};for(const s of subjects)next[s]=String(base+(remainder-->0?1:0));setWeights(next)}
 
