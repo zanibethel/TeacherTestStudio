@@ -33,29 +33,28 @@ export default async function Dashboard({searchParams}:{searchParams:Promise<{er
     const setupComplete=gettingStarted.every(step=>step.done)
     const setupDone=gettingStarted.filter(step=>step.done).length
     return <main>
-      <div className="dashboard-heading"><div><span className="eyebrow">TEACHER WORKSPACE</span><h1>Teacher dashboard</h1><p className="muted">Welcome, {profile.full_name||user.email}</p></div><form action="/auth/signout" method="post"><button className="ghost">Sign out</button></form></div>
       {query.error&&<p className="bad notice">{query.error}</p>}
 
-      {!setupComplete&&<section className="card" style={{padding:18}}>
-        <div className="row between" style={{alignItems:'flex-start'}}><div><span className="eyebrow">GETTING STARTED</span><h2 style={{margin:'5px 0 3px'}}>Set up your classroom</h2><p className="muted" style={{margin:0}}>CramLoop checks these off automatically as you work.</p></div><span className="pill">{setupDone}/5 complete</span></div>
-        <div style={{display:'grid',gap:8,marginTop:14}}>{gettingStarted.map((step,index)=><Link key={step.label} href={step.href} style={{display:'grid',gridTemplateColumns:'30px minmax(0,1fr) auto',alignItems:'center',gap:10,padding:'10px 12px',border:'1px solid #e4e7ef',borderRadius:12,background:step.done?'#f0fdf4':'#fff',color:'#172033'}}><span aria-hidden style={{width:26,height:26,borderRadius:999,display:'grid',placeItems:'center',fontWeight:850,background:step.done?'#dcfce7':'#eef2ff',color:step.done?'#047857':'#4338ca'}}>{step.done?'✓':index+1}</span><span style={{minWidth:0}}><b style={{display:'block'}}>{step.label}</b><small className="muted">{step.detail}</small></span><span aria-hidden style={{color:'#4338ca',fontWeight:800}}>→</span></Link>)}</div>
+      {!setupComplete&&<section className="card" style={{padding:16}}>
+        <div className="row between" style={{alignItems:'center'}}><div><h2 style={{margin:0}}>Set up your classroom</h2></div><span className="pill">{setupDone}/5</span></div>
+        <div style={{display:'grid',gap:8,marginTop:12}}>{gettingStarted.map((step,index)=><Link key={step.label} href={step.href} style={{display:'grid',gridTemplateColumns:'30px minmax(0,1fr) auto',alignItems:'center',gap:10,padding:'10px 12px',border:'1px solid #e4e7ef',borderRadius:12,background:step.done?'#f0fdf4':'#fff',color:'#172033'}}><span aria-hidden style={{width:26,height:26,borderRadius:999,display:'grid',placeItems:'center',fontWeight:850,background:step.done?'#dcfce7':'#eef2ff',color:step.done?'#047857':'#4338ca'}}>{step.done?'✓':index+1}</span><span style={{minWidth:0}}><b style={{display:'block'}}>{step.label}</b><small className="muted">{step.detail}</small></span><span aria-hidden style={{color:'#4338ca',fontWeight:800}}>→</span></Link>)}</div>
       </section>}
 
-      <section className="card" style={{padding:18}}>
-        <div className="row between" style={{alignItems:'flex-start'}}><div><span className="eyebrow">WHAT NEEDS ME</span><h2 style={{margin:'5px 0 3px'}}>Classroom attention</h2><p className="muted" style={{margin:0}}>Start with the items most likely to need action today.</p></div><span className="pill" style={{background:attentionCount?'#fff7ed':'#ecfdf5',color:attentionCount?'#c2410c':'#047857'}}>{attentionCount?`${attentionCount} item${attentionCount===1?'':'s'}`:'All clear'}</span></div>
-        <div className="dashboard-tool-grid" style={{marginTop:14}}>
-          <Link className="dashboard-tool" href="/teacher-roster"><b>Student requests</b><span>{pendingConnections??0} waiting for approval</span></Link>
-          <Link className="dashboard-tool" href="/teacher-progress"><b>Due soon</b><span>{dueSoon.length} assignment{dueSoon.length===1?'':'s'} due within 48 hours</span></Link>
-          <Link className="dashboard-tool" href="/teacher-progress"><b>Past due</b><span>{pastDue.length} active assignment{pastDue.length===1?'':'s'} past due</span></Link>
-          <Link className="dashboard-tool" href="/reports"><b>Active assignments</b><span>{classroomShares.length} assignment{classroomShares.length===1?'':'s'} active</span></Link>
+      <section className="card" style={{padding:16}}>
+        <div className="row between" style={{alignItems:'center',gap:10}}><h2 style={{margin:0}}>Classroom attention</h2><span className="pill" style={{background:attentionCount?'#fff7ed':'#ecfdf5',color:attentionCount?'#c2410c':'#047857',whiteSpace:'nowrap'}}>{attentionCount?`${attentionCount} item${attentionCount===1?'':'s'}`:'All clear'}</span></div>
+        <div className="dashboard-tool-grid" style={{marginTop:12}}>
+          <Link className="dashboard-tool" href="/teacher-roster"><b>Student requests</b><span>{pendingConnections??0} waiting</span></Link>
+          <Link className="dashboard-tool" href="/teacher-progress"><b>Due soon</b><span>{dueSoon.length} due in 48 hours</span></Link>
+          <Link className="dashboard-tool" href="/teacher-progress"><b>Past due</b><span>{pastDue.length} past due</span></Link>
+          <Link className="dashboard-tool" href="/reports"><b>Active assignments</b><span>{classroomShares.length} active</span></Link>
         </div>
       </section>
 
-      <section className="card dashboard-actions">
-        <div className="dashboard-primary-actions" style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:10}}><Link className="button dashboard-create" href="/tests/new">Build a test</Link><Link className="secondary button dashboard-create" href="/assignments/new">Create assignment</Link></div>
+      <section className="card dashboard-actions" style={{padding:16}}>
+        <div className="dashboard-primary-actions" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}><Link className="button dashboard-create" href="/tests/new">Build a test</Link><Link className="secondary button dashboard-create" href="/assignments/new">Create assignment</Link></div>
         <div className="dashboard-tool-grid"><Link className="dashboard-tool" href="/question-bank"><b>Question bank</b><span>{bankCount??0} saved questions</span></Link><Link className="dashboard-tool" href="/shared-library"><b>Shared resources</b><span>Browse reusable teacher content</span></Link><Link className="dashboard-tool" href="/teacher-progress"><b>Student progress</b><span>See who needs attention now</span></Link><Link className="dashboard-tool" href="/teacher-roster"><b>Student roster</b><span>Manage your students</span></Link><Link className="dashboard-tool" href="/teacher-groups"><b>Groups</b><span>Organize classes and cohorts</span></Link>{profile.teacher_can_invite&&<Link className="dashboard-tool" href="/teacher-access"><b>Teacher access</b><span>Invite approved teachers</span></Link>}</div>
       </section>
-      <div className="row between dashboard-library-heading"><div><h2>Tests</h2><p className="muted">Tests hold content. Assignments decide who gets them and how they are delivered.</p></div><Link href="/tests/new">Build new →</Link></div>
+      <div className="row between dashboard-library-heading"><div><h2>Tests</h2><p className="muted">Reusable test content</p></div><Link href="/tests/new">Build new →</Link></div>
       {!tests?.length?<div className="card empty-state"><h3>No tests yet</h3><p className="muted">Build a reusable test from your Question Bank, then create an assignment when you are ready.</p><Link className="button" href="/tests/new">Build your first test</Link></div>:tests.map((t:any)=><section className="card" key={t.id}><div className="row between"><div><h3 style={{marginBottom:4}}>{t.title}</h3><p className="muted" style={{marginTop:0}}>Built {new Date(t.created_at).toLocaleDateString()} · Edited {new Date(t.updated_at).toLocaleDateString()} · {t.attempts?.[0]?.count??0} attempt(s)</p></div><span className="pill">{t.status}</span></div><div className="row" style={{flexWrap:'wrap',gap:8}}><Link className="button" href={`/assignments/new?test=${t.id}`}>Create assignment</Link><Link className="secondary button" href={`/tests/${t.id}/preview`}>Preview</Link><Link className="secondary button" href={`/tests/${t.id}/edit`} aria-label={`Edit ${t.title}`}>✎ Edit</Link><Link className="secondary button" href={`/tests/${t.id}/reports`}>Reports</Link><form action={copyTest.bind(null,t.id)}><button className="secondary" aria-label={`Copy ${t.title}`}>⧉ Copy</button></form></div></section>)}
     </main>
   }
