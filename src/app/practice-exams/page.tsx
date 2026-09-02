@@ -41,7 +41,7 @@ export default async function PracticeExams({searchParams}:{searchParams:Promise
     return groups
   },new Map()).entries()).map(([bundleId,bundlePresets])=>{
     const mainExam=chooseMainExam(bundlePresets)
-    return {bundleId,mainExam,practiceExams:bundlePresets.filter(p=>p.id!==mainExam.id)}
+    return {bundleId,mainExam,practiceExams:bundlePresets.filter((p:Preset)=>p.id!==mainExam.id)}
   })
 
   return <main>
@@ -64,7 +64,7 @@ export default async function PracticeExams({searchParams}:{searchParams:Promise
         <span className="eyebrow">FOCUSED PRACTICE EXAMS</span>
         <h3 style={{margin:'6px 0'}}>Practice one area at a time</h3>
         <p className="muted">Use these shorter tests before or after the full simulation to target specific skills.</p>
-        <div className="stack">{practiceExams.map(p=><section className="question-summary" key={p.id} style={{padding:18}}>
+        <div className="stack">{practiceExams.map((p:Preset)=><section className="question-summary" key={p.id} style={{padding:18}}>
           <div className="row between" style={{alignItems:'flex-start',gap:12}}><div><b>{p.title}</b><p className="muted" style={{margin:'4px 0'}}>{p.description}</p></div><span className="pill">{p.question_count} questions</span></div>
           <div className="row" style={{flexWrap:'wrap',marginTop:12}}><span className="muted">{p.duration_minutes?`${p.duration_minutes} min`:'Untimed'} · {p.passing_score_percent}% target</span><StartPreset preset={p}/></div>
         </section>)}</div>
