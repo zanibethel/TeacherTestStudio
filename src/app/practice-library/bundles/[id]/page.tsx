@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { selectPracticeBundleOption, startBundlePractice, submitBundleReview } from '../../actions'
+import { selectPracticeBundleOption, startBundleExamPreset, startBundlePractice, submitBundleReview } from '../../actions'
 
 function durationLabel(hours:number){
   if(hours===24)return '24 hours'
@@ -22,11 +22,12 @@ function movement(value:number|null|undefined){if(value==null)return 'No trend y
 export default async function PracticeBundleDetail({params,searchParams}:{params:Promise<{id:string}>,searchParams:Promise<{error?:string;selected?:string;reviewed?:string}>}){
   const{id}=await params;const query=await searchParams;const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
   const{data:profile}=await supabase.from('profiles').select('role').eq('id',user.id).single();if(profile?.role!=='student')redirect('/dashboard')
-  const[{data:bundle,error},{data:readiness},{data:reviewData},{data:progress}]=await Promise.all([
+  const[{data:bundle,error},{data:readiness},{data:reviewData},{data:progress},{data:presetData}]=await Promise.all([
     supabase.rpc('get_practice_bundle_detail',{p_bundle_id:id}),
     supabase.rpc('get_bundle_readiness',{p_bundle_id:id}),
     supabase.rpc('get_practice_bundle_reviews',{p_bundle_id:id}),
-    supabase.rpc('get_bundle_progress',{p_bundle_id:id})
+    supabase.rpc('get_bundle_progress',{p_bundle_id:id}),
+    supabase.rpc('get_practice_exam_preset_catalog')
   ]);if(error||!bundle?.id)notFound()
   const activePass=['paid','comped'].includes(bundle.entitlement_status??'')&&(!bundle.entitlement_expires_at||new Date(bundle.entitlement_expires_at).getTime()>Date.now())
   const resources=Array.isArray(bundle.resources)?bundle.resources:[]
@@ -42,10 +43,21 @@ export default async function PracticeBundleDetail({params,searchParams}:{params
   const myReview=reviewData?.user_review
   const progressSessions=Array.isArray(progress?.sessions)?progress.sessions:[]
   const progressTopics=Array.isArray(progress?.topics)?progress.topics:[]
+  const examPresets=(Array.isArray(presetData)?presetData:[]).filter((p:any)=>p.bundle_id===id)
+  const mainExam=[...examPresets].sort((a:any,b:any)=>Number(b.question_count||0)-Number(a.question_count||0)||Number(a.position||0)-Number(b.position||0))[0]
+  const psiStyle=mainExam?/psi/i.test(`${mainExam.title||''} ${mainExam.mode_label||''} ${mainExam.provider_label||''}`):false
   return <main>
     <Link href="/practice-library">← Practice library</Link>
     <div className="row between"><div><h1>{bundle.title}</h1><p className="muted">{bundle.subject}</p></div><span className="pill">{activePass?'Pass active':bundle.verified?'CramLoop Verified':'Cram & prep access'}</span></div>
     {query.error&&<p className="bad">{query.error}</p>}{query.selected&&<p className="good">Access option selected. Checkout will activate the timed access window once payments are connected.</p>}{query.reviewed&&<p className="good">Thanks. Your review has been saved.</p>}
+
+    {mainExam&&<section className="card" style={{padding:'clamp(20px,4vw,34px)',border:'2px solid var(--primary,#4338ca)'}}>
+      <div className="row between" style={{alignItems:'flex-start',gap:14}}><div><span className="eyebrow">MAIN EXAM</span><h2 style={{fontSize:'clamp(1.6rem,5vw,2.35rem)',margin:'8px 0 4px'}}>{psiStyle?'Full PSI-Style Practice Exam':'Full Practice Exam'}</h2><p className="muted" style={{marginTop:0}}>{mainExam.title}</p></div><span className="pill">{mainExam.available?'Available':'Access required'}</span></div>
+      <p>{mainExam.description}</p>
+      <div className="grid three pass-stats"><div><span className="muted">Questions</span><b>{mainExam.question_count}</b></div><div><span className="muted">Time</span><b>{mainExam.duration_minutes?`${mainExam.duration_minutes} min`:'Untimed'}</b></div><div><span className="muted">Target</span><b>{mainExam.passing_score_percent}%</b></div></div>
+      <p className="muted">Complete randomized simulation using the bundle&apos;s exam-domain blueprint. This is original practice content, not an official exam.</p>
+      {mainExam.available?<form action={startBundleExamPreset.bind(null,id,mainExam.id)}><button type="submit">{psiStyle?'Start full PSI-style exam':'Start full practice exam'}</button></form>:<p className="muted">Bundle access is required to start this exam.</p>}
+    </section>}
 
     {bundle.verified&&<section className="card"><div className="row between"><div><h2 style={{marginBottom:4}}>✓ CramLoop Verified</h2><p className="muted">This platform bundle has been deliberately reviewed for its stated exam or skill goal.</p></div><span className="pill">Version {bundle.content_version||'1.0'}</span></div><div className="grid two"><div><span className="muted">Current as of</span><p><b>{currentLabel||'Review date not published'}</b></p></div><div><span className="muted">Last platform review</span><p><b>{bundle.reviewed_at?new Date(bundle.reviewed_at).toLocaleDateString():'—'}</b></p></div></div>{bundle.alignment_note&&<><span className="muted">Alignment</span><p>{bundle.alignment_note}</p></>}</section>}
 
@@ -87,7 +99,7 @@ export default async function PracticeBundleDetail({params,searchParams}:{params
     <section className="card"><p>{bundle.description}</p><p><b>{resources.length} included resource{resources.length===1?'':'s'}</b> · randomized practice · weak-area review · focused mini-tests</p>{activePass&&bundle.entitlement_expires_at&&<p className="good"><b>Active through {new Date(bundle.entitlement_expires_at).toLocaleString()}</b></p>}
       {!activePass&&<><h2>Choose how long you need</h2><p className="muted">Studying at the last minute? Start with a 24-hour cram session. Need more time? Choose a longer prep window. Your clock starts when paid access is activated, not when you browse this page.</p><div className="grid two">{accessOptions.map((option:any)=>{const discounted=option.base_price_cents!=null&&option.price_cents!=null&&Number(option.price_cents)<Number(option.base_price_cents);return <section className="card" key={option.id} style={{margin:0}}><div className="row between"><h3 style={{margin:0}}>{option.label}</h3>{(option.pricing_label||option.badge)&&<span className="pill">{option.pricing_label||option.badge}</span>}</div><p><b>{durationLabel(Number(option.duration_hours))} full access</b></p><p className="muted">Unlimited practice inside this subject bundle during the active window.</p>{option.price_cents!=null?<p className="row">{discounted&&<span className="muted" style={{textDecoration:'line-through'}}>${(option.base_price_cents/100).toFixed(2)}</span>}<b>${(option.price_cents/100).toFixed(2)}</b></p>:<p><b>Launch price coming soon</b></p>}<form action={selectPracticeBundleOption.bind(null,id,option.id)}><button>{option.price_cents!=null?`Choose ${option.label}`:`Try ${option.label}`}</button></form></section>})}</div><p className="muted">Selecting an option currently creates a pending access choice only. Paid resources remain locked until checkout is connected.</p></>}
     </section>
-    <h2>Included practice</h2>
+    <section style={{marginTop:34,paddingTop:26,borderTop:'3px solid var(--border,#e2e8f0)'}}><span className="eyebrow">FOCUSED PRACTICE</span><h2 style={{margin:'6px 0'}}>Practice by topic</h2><p className="muted">Choose a section and question count to strengthen one area at a time. These practice sets are separate from the full exam above.</p></section>
     {resources.map((r:any)=>{const unlocked=activePass||r.is_free_preview;return <section className="card" key={r.id}><div className="row between"><div><b>{r.title}</b><p className="muted">{String(r.collection_type).replaceAll('_',' ')}{r.is_free_preview?' · Free preview':''}</p></div><span className="pill">{unlocked?'Available':'Access required'}</span></div><p>{r.description}</p>{unlocked?<form action={startBundlePractice.bind(null,id,r.id)} className="row"><label>Questions <select name="question_count" defaultValue="10"><option value="5">5</option><option value="10">10</option><option value="15">15</option><option value="20">20</option><option value="25">25</option><option value="30">30</option></select></label><button>Start randomized practice</button></form>:<p className="muted">This resource unlocks with an active cram or prep window.</p>}</section>})}
   </main>
 }
