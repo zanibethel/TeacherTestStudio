@@ -31,6 +31,33 @@ export async function startBundleExamPreset(bundleId:string,presetId:string){
   redirect(`/practice/${data}`)
 }
 
+export async function savePracticeBundle(bundleId:string){
+  const supabase=await createClient()
+  const{data:{user}}=await supabase.auth.getUser()
+  if(!user)redirect('/login')
+  const{data:profile}=await supabase.from('profiles').select('role').eq('id',user.id).single()
+  if(profile?.role!=='student')redirect('/dashboard')
+  const{error}=await supabase.from('student_saved_practice_bundles').upsert(
+    {student_id:user.id,bundle_id:bundleId},
+    {onConflict:'student_id,bundle_id',ignoreDuplicates:true}
+  )
+  if(error)redirect(`/practice-library/bundles/${bundleId}?error=${encodeURIComponent(error.message)}`)
+  revalidatePath(`/practice-library/bundles/${bundleId}`)
+  revalidatePath('/my-passes')
+  revalidatePath('/dashboard')
+}
+
+export async function removeSavedPracticeBundle(bundleId:string){
+  const supabase=await createClient()
+  const{data:{user}}=await supabase.auth.getUser()
+  if(!user)redirect('/login')
+  const{error}=await supabase.from('student_saved_practice_bundles').delete().eq('student_id',user.id).eq('bundle_id',bundleId)
+  if(error)redirect(`/practice-library/bundles/${bundleId}?error=${encodeURIComponent(error.message)}`)
+  revalidatePath(`/practice-library/bundles/${bundleId}`)
+  revalidatePath('/my-passes')
+  revalidatePath('/dashboard')
+}
+
 export async function submitBundleReview(bundleId:string,fd:FormData){
   const supabase=await createClient()
   const{data:{user}}=await supabase.auth.getUser()

@@ -25,7 +25,7 @@ export default function AppMenu({role,canInvite,isAdmin}:{role:string|null;canIn
         {canInvite&&<Link href="/teacher-access">Teacher Access</Link>}
       </>:<>
         <Link href="/dashboard">Dashboard</Link>
-        <Link href="/my-passes">My Passes</Link>
+        <Link href="/my-passes">My Workspace</Link>
         <Link href="/practice-library">Browse Practice Passes</Link>
         <Link href="/practice-exams">Bundle Exam Presets</Link>
         <Link href="/suggest-content">Suggest CramLoop Content</Link>

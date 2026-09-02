@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { selectPracticeBundleOption, startBundleExamPreset, startBundlePractice, submitBundleReview } from '../../actions'
+import { removeSavedPracticeBundle, savePracticeBundle, selectPracticeBundleOption, startBundleExamPreset, startBundlePractice, submitBundleReview } from '../../actions'
 
 function durationLabel(hours:number){
   if(hours===24)return '24 hours'
@@ -22,12 +22,13 @@ function movement(value:number|null|undefined){if(value==null)return 'No trend y
 export default async function PracticeBundleDetail({params,searchParams}:{params:Promise<{id:string}>,searchParams:Promise<{error?:string;selected?:string;reviewed?:string}>}){
   const{id}=await params;const query=await searchParams;const supabase=await createClient();const{data:{user}}=await supabase.auth.getUser();if(!user)redirect('/login')
   const{data:profile}=await supabase.from('profiles').select('role').eq('id',user.id).single();if(profile?.role!=='student')redirect('/dashboard')
-  const[{data:bundle,error},{data:readiness},{data:reviewData},{data:progress},{data:presetData}]=await Promise.all([
+  const[{data:bundle,error},{data:readiness},{data:reviewData},{data:progress},{data:presetData},{data:savedBundle}]=await Promise.all([
     supabase.rpc('get_practice_bundle_detail',{p_bundle_id:id}),
     supabase.rpc('get_bundle_readiness',{p_bundle_id:id}),
     supabase.rpc('get_practice_bundle_reviews',{p_bundle_id:id}),
     supabase.rpc('get_bundle_progress',{p_bundle_id:id}),
-    supabase.rpc('get_practice_exam_preset_catalog')
+    supabase.rpc('get_practice_exam_preset_catalog'),
+    supabase.from('student_saved_practice_bundles').select('bundle_id').eq('student_id',user.id).eq('bundle_id',id).maybeSingle()
   ]);if(error||!bundle?.id)notFound()
   const activePass=['paid','comped'].includes(bundle.entitlement_status??'')&&(!bundle.entitlement_expires_at||new Date(bundle.entitlement_expires_at).getTime()>Date.now())
   const resources=Array.isArray(bundle.resources)?bundle.resources:[]
@@ -48,7 +49,7 @@ export default async function PracticeBundleDetail({params,searchParams}:{params
   const psiStyle=mainExam?/psi/i.test(`${mainExam.title||''} ${mainExam.mode_label||''} ${mainExam.provider_label||''}`):false
   return <main>
     <Link href="/practice-library">← Practice library</Link>
-    <div className="row between"><div><h1>{bundle.title}</h1><p className="muted">{bundle.subject}</p></div><span className="pill">{activePass?'Pass active':bundle.verified?'CramLoop Verified':'Cram & prep access'}</span></div>
+    <div className="row between" style={{alignItems:'flex-start',gap:14}}><div><h1>{bundle.title}</h1><p className="muted">{bundle.subject}</p></div><div className="row" style={{flexWrap:'wrap',justifyContent:'flex-end'}}><span className="pill">{activePass?'Pass active':bundle.verified?'CramLoop Verified':'Cram & prep access'}</span><form action={savedBundle?removeSavedPracticeBundle.bind(null,id):savePracticeBundle.bind(null,id)}><button className="secondary" type="submit" aria-pressed={Boolean(savedBundle)}>{savedBundle?'★ Saved to workspace':'☆ Save to workspace'}</button></form></div></div>
     {query.error&&<p className="bad">{query.error}</p>}{query.selected&&<p className="good">Access option selected. Checkout will activate the timed access window once payments are connected.</p>}{query.reviewed&&<p className="good">Thanks. Your review has been saved.</p>}
 
     {mainExam&&<section className="card" style={{padding:'clamp(20px,4vw,34px)',border:'2px solid var(--primary,#4338ca)'}}>

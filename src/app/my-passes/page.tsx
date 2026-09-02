@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { removeSavedPracticeBundle } from '../practice-library/actions'
 
 function remaining(expiresAt:string|null){
   if(!expiresAt)return 'No expiration'
@@ -26,8 +27,12 @@ export default async function MyPasses(){
   if(!user)redirect('/login')
   const{data:profile}=await supabase.from('profiles').select('role').eq('id',user.id).single()
   if(profile?.role!=='student')redirect('/dashboard')
-  const{data:passes,error}=await supabase.rpc('get_student_practice_passes')
+  const[{data:passes,error},{data:savedRows,error:savedError}]=await Promise.all([
+    supabase.rpc('get_student_practice_passes'),
+    supabase.from('student_saved_practice_bundles').select('bundle_id,saved_at,bundle:practice_bundles(id,title,description,subject,category,jurisdiction,verified)').eq('student_id',user.id).order('saved_at',{ascending:false})
+  ])
   const rows=passes??[]
+  const saved=savedRows??[]
   const metrics=await Promise.all(rows.map(async(p:any)=>{
     const[{data:readiness},{data:progress}]=await Promise.all([
       supabase.rpc('get_bundle_readiness',{p_bundle_id:p.bundle_id}),
@@ -57,10 +62,15 @@ export default async function MyPasses(){
 
   return <main>
     <Link href="/dashboard">← Dashboard</Link>
-    <h1>My passes</h1>
-    <p className="muted">Your cram sessions and practice passes in one place. CramLoop tracks readiness, improvement, coverage, and what you should practice next.</p>
-    {error&&<p className="bad">{error.message}</p>}
-    {!rows.length&&<section className="card"><h2>No passes yet</h2><p className="muted">Try a free practice preview or choose a timed cram session when you need full access.</p><Link className="button" href="/practice-library">Browse practice bundles</Link></section>}
+    <h1>My workspace</h1>
+    <p className="muted">Return to saved bundles, active practice passes, readiness scores, and the areas CramLoop recommends next.</p>
+    {(error||savedError)&&<p className="bad">{error?.message||savedError?.message}</p>}
+
+    <div className="row between" style={{alignItems:'end',marginTop:24}}><div><span className="eyebrow">SAVED BUNDLES</span><h2 style={{margin:'4px 0'}}>Favorites</h2></div><Link href="/practice-library">Browse bundles →</Link></div>
+    {!saved.length?<section className="card"><h3>No saved bundles yet</h3><p className="muted">Open any practice bundle and choose “Save to workspace” for one-tap access here.</p><Link className="button" href="/practice-library">Find a practice bundle</Link></section>:saved.map((row:any)=>{const bundle=Array.isArray(row.bundle)?row.bundle[0]:row.bundle;return bundle?<section className="card" key={row.bundle_id}><div className="row between" style={{alignItems:'flex-start',gap:14}}><div><div className="row" style={{gap:8,flexWrap:'wrap'}}><span className="pill">★ Saved</span>{bundle.verified&&<span className="pill">CramLoop Verified</span>}</div><h3 style={{marginBottom:4}}>{bundle.title}</h3><p className="muted" style={{marginTop:0}}>{bundle.category||bundle.subject}{bundle.jurisdiction?` · ${bundle.jurisdiction}`:''}</p></div><form action={removeSavedPracticeBundle.bind(null,row.bundle_id)}><button className="secondary" type="submit" aria-label={`Remove ${bundle.title} from saved bundles`}>Remove</button></form></div><p>{bundle.description}</p><Link className="button" href={`/practice-library/bundles/${row.bundle_id}`}>Open bundle</Link></section>:null})}
+
+    <span className="eyebrow" style={{display:'block',marginTop:32}}>PRACTICE ACCESS</span><h2 style={{marginTop:4}}>My passes</h2>
+    {!rows.length&&<section className="card"><h3>No passes yet</h3><p className="muted">Free bundles can still be saved above. Timed or paid practice access will appear here once selected.</p></section>}
     {active.length>0&&<><h2>Active now</h2>{active.map((p:any)=><PassCard key={p.entitlement_id} p={p}/>)}</>}
     {pending.length>0&&<><h2>Selected</h2>{pending.map((p:any)=><PassCard key={p.entitlement_id} p={p}/>)}</>}
     {past.length>0&&<><h2>Past passes</h2>{past.map((p:any)=><PassCard key={p.entitlement_id} p={p}/>)}</>}
