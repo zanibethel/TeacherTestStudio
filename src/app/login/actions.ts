@@ -2,7 +2,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
-const SITE_URL = 'https://cramloop.app'
+const SITE_URL = 'https://www.cramloop.app'
 
 function safeNext(value:FormDataEntryValue|null){
   const next=String(value??'').trim()
@@ -11,6 +11,9 @@ function safeNext(value:FormDataEntryValue|null){
 function invitedTeacherUrl(invite:string,email:string,message:string,key:'error'|'message'='error'){
   const q=new URLSearchParams({role:'teacher',invite,email,[key]:message})
   return '/login?'+q.toString()
+}
+function studentPasswordSignupDisabled(){
+  return String(process.env.CRAMLOOP_STUDENT_PASSWORD_SIGNUP_DISABLED||'').toLowerCase()==='true'
 }
 
 export async function login(fd: FormData) {
@@ -23,6 +26,24 @@ export async function login(fd: FormData) {
   redirect(next)
 }
 
+export async function signInWithGoogle(fd:FormData){
+  const s=await createClient()
+  const next=safeNext(fd.get('next'))
+  const callback=new URL('/auth/callback',SITE_URL)
+  callback.searchParams.set('next',next)
+  callback.searchParams.set('provider','google')
+  const{data,error}=await s.auth.signInWithOAuth({
+    provider:'google',
+    options:{
+      redirectTo:callback.toString(),
+      queryParams:{prompt:'select_account'},
+    },
+  })
+  if(error)redirect('/login?error='+encodeURIComponent(error.message)+(next!=='/dashboard'?'&next='+encodeURIComponent(next):''))
+  if(data.url)redirect(data.url)
+  redirect('/login?error='+encodeURIComponent('Google sign-in could not be started. Please try again.'))
+}
+
 export async function signup(fd: FormData) {
   const s = await createClient()
   const email = String(fd.get('email')).trim().toLowerCase()
@@ -32,6 +53,7 @@ export async function signup(fd: FormData) {
   const teacher_invite = String(fd.get('teacher_invite') ?? '').trim().toUpperCase()
   const requested_teacher_id = String(fd.get('requested_teacher_id') ?? '').trim()
   const next=safeNext(fd.get('next'))
+  if(requested_role==='student'&&studentPasswordSignupDisabled())redirect('/signup/student?error='+encodeURIComponent('Student password signup is disabled. Use your school-managed Google account instead.')+(next!=='/dashboard'?'&next='+encodeURIComponent(next):''))
   if (!full_name) redirect((requested_role==='student'?'/signup/student':'/login')+'?error='+encodeURIComponent('Enter your name.'))
   if (requested_role === 'teacher'){
     if(!teacher_invite)redirect('/login?error=' + encodeURIComponent('Teacher accounts require a private invite from an approved teacher.'))
