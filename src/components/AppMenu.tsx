@@ -15,6 +15,7 @@ export default function AppMenu({role,canInvite,isAdmin}:{role:string|null;canIn
         <Link href="/notifications">Notifications</Link>
         <Link href="/tests/new">Build a test</Link>
         <Link href="/assignments/new">Create assignment</Link>
+        <Link href="/classroom-tools">Classroom Tools</Link>
         <Link href="/reports">Reports</Link>
         <Link href="/teacher-roster">Students / Roster</Link>
         <Link href="/teacher-groups">Groups</Link>
