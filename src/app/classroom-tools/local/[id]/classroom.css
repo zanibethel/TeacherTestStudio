@@ -1,0 +1,6 @@
+body.local-classroom-active{background:#fff}
+body.local-classroom-active .site-header,
+body.local-classroom-active .site-footer{display:none!important}
+@media(max-width:640px){
+  body.local-classroom-active .focus-shell{height:100dvh}
+}
